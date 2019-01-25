@@ -1,0 +1,13 @@
+[dt-epel7]
+name=epel 7
+#baseurl=http://download.fedoraproject.org/pub/epel/7/$basearch
+metalink=https://mirrors.fedoraproject.org/metalink?repo=epel-7&arch=$basearch
+enabled=1
+gpgcheck=0
+
+[dt-epel7-source]
+name=epel 7 - Source
+#baseurl=http://download.fedoraproject.org/pub/epel/7/SRPMS
+metalink=https://mirrors.fedoraproject.org/metalink?repo=epel-source-7&arch=$basearch
+enabled=1
+gpgcheck=0

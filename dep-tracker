@@ -1,0 +1,257 @@
+#!/bin/bash
+# Track dependendencies of a list of packages
+#  and do something (usuall email) when the dependencies change
+#
+
+#####
+# Variables
+#####
+WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+#WORK_DIR="~/.dep-tracker"
+CONF_DIR="${WORK_DIR}/conf"
+CUST_DIR="${WORK_DIR}/customers"
+LOG_DIR="${WORK_DIR}/logs"
+REPO_DIR="${WORK_DIR}/repos"
+LOG_FILE="${LOG_DIR}/dt.logs"
+CUST_CONF="dt.conf"
+CUST_LIST="package.list"
+CUST_NEW_DIR="new"
+CUST_LAST_DIR="last"
+
+#####
+# Setup
+#####
+#dnf --quiet clean all
+
+#####
+# Generate list of source rpms from package list
+#   This only gets called if source is being checked
+#   on the check list
+#####
+generate_source_list(){
+  echo "    Getting source list and source list nvr ..."
+  this_repo="${1}"
+  this_work_dir="${2}"
+  dnf --quiet --config=${REPO_DIR}/${this_repo}.repo  --disablerepo=* --enablerepo=dt-${this_repo} repoquery --qf="%{SOURCERPM}" $(cat ${this_work_dir}/${CUST_LIST}) | sed "s/.src.rpm$//" | sort -u -o ${this_work_dir}/${CUST_LIST}.source.nvr
+  dnf --quiet --config=${REPO_DIR}/${this_repo}.repo  --disablerepo=* --enablerepo=dt-${this_repo}-source repoquery --qf="%{NAME}" $(cat ${this_work_dir}/${CUST_LIST}.source.nvr) | sort -u -o ${this_work_dir}/${CUST_LIST}.source
+}
+
+#####
+# Work
+#####
+
+# Get list of customers to check for
+for customer in $(ls -1 ${CUST_DIR})
+do
+  # Customer Setup
+  echo "Customer: ${customer}"
+  customer_dir="${CUST_DIR}/${customer}"
+  things_changed="False"
+  if ! [ -d ${customer_dir}/archive ] ; then
+    mkdir -p ${customer_dir}/{archive,logs,${CUST_NEW_DIR},${CUST_LAST_DIR}}
+	  last_change_date="NEVER"
+	  last_check_date="NEVER"
+	else
+	  last_change_date="$(cat ${customer_dir}/${CUST_LAST_DIR}/date.check)"
+	  last_check_date="$(cat ${customer_dir}/${CUST_NEW_DIR}/date.check)"
+  fi
+	rm -f ${customer_dir}/${CUST_NEW_DIR}/*
+	date +%Y-%m-%d-%R-%Z > ${customer_dir}/${CUST_NEW_DIR}/date.check
+	cp ${customer_dir}/${CUST_LIST} ${customer_dir}/${CUST_NEW_DIR}/
+	
+  # Customer Conf Parsing
+  customer_package_list="$(cat ${customer_dir}/${CUST_LIST})"
+  customer_email_list="$(grep ^Email: ${customer_dir}/${CUST_CONF} | cut -d' ' -f2-)"
+  customer_action_list="$(grep ^Action: ${customer_dir}/${CUST_CONF} | cut -d' ' -f2-)"
+  customer_repo_name="$(grep ^Repo: ${customer_dir}/${CUST_CONF} | cut -d' ' -f2-)"
+  customer_check_list="$(grep ^Checks: ${customer_dir}/${CUST_CONF} | cut -d' ' -f2-)"
+  #echo "  Email List: ${customer_email_list}"
+  #echo "  Action List: ${customer_action_list}"
+  #echo "  Repo Name: ${customer_repo_name}"
+  #echo "  Check List: ${customer_check_list}"
+  #echo "  Package List: ${customer_package_list}"
+  #echo
+	
+
+
+	# Do the checks
+	echo "  Checking ..."
+	
+	# Default: Always check if the customers package list has changed
+	if diff --brief ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST} ${customer_dir}/${CUST_LAST_DIR}/${CUST_LIST} > /dev/null 2>&1 ; then
+	  echo "    No change in package list"
+	else
+	  things_changed="True"
+	  packages_added="$(comm -23 ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST} ${customer_dir}/${CUST_LAST_DIR}/${CUST_LIST})"
+	  packages_removed="$(comm -13 ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST} ${customer_dir}/${CUST_LAST_DIR}/${CUST_LIST})"
+	  echo "    There were changes in the package list"
+	  #echo "ADDED: ${packages_added}"
+	  #echo "REMOVED: ${packages_removed}"
+	  echo "== PACKAGES ADDED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	  echo "${packages_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	  echo "== PACKAGES REMOVED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	  echo "${packages_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	  echo  >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	fi
+
+	for check in ${customer_check_list}
+	do
+	  case ${check} in
+	    package-nvr )
+	      # package-nvr
+	      echo "    Getting package list nvr ..."
+	      dnf --quiet --config=${REPO_DIR}/${customer_repo_name}.repo  --disablerepo=* --enablerepo=dt-${customer_repo_name} repoquery --qf="%{name}-%{version}-%{release}" ${customer_package_list} >> ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST}.nvr
+	      #echo "  Checking if package list nvrs has changed"
+	      if diff --brief ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST}.nvr ${customer_dir}/${CUST_LAST_DIR}/${CUST_LIST}.nvr > /dev/null 2>&1 ; then
+	        echo "      No change in package list nvrs"
+	      else
+	        things_changed="True"
+	        package_nvrs_added="$(comm -23 ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST}.nvr ${customer_dir}/${CUST_LAST_DIR}/${CUST_LIST}.nvr)"
+	        package_nvrs_removed="$(comm -13 ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST}.nvr ${customer_dir}/${CUST_LAST_DIR}/${CUST_LIST}.nvr)"
+	        echo "      There were changes in package list nvrs"
+	        #echo "ADDED: ${package_nvrs_added}"
+	        #echo "REMOVED: ${package_nvrs_removed}"
+	        echo "== PACKAGE NVRS ADDED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	        echo "${package_nvrs_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	        echo "== PACKAGE NVRS REMOVED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	        echo "${package_nvrs_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	      fi		
+	    ;;
+	    package-deps )
+	      # package-deps
+	      # Get the latest overall deps
+	      echo "    Getting latest package deps ..."
+	      dnf --quiet  --config=${REPO_DIR}/${customer_repo_name}.repo  --disablerepo=* --enablerepo=dt-${customer_repo_name} repoquery --requires --tree --resolve --qf='%{name}' ${customer_package_list} | sed 's/.* \([^ ]*\) \[.*\]$/\1/' | sort -u -o ${customer_dir}/${CUST_NEW_DIR}/dependency.list
+	      #echo "  Checking deps against last set"
+	      if diff --brief ${customer_dir}/${CUST_NEW_DIR}/dependency.list ${customer_dir}/${CUST_LAST_DIR}/dependency.list > /dev/null 2>&1 ; then
+	        echo "      No change in package deps"
+	      else
+	        things_changed="True"
+	        deps_added="$(comm -23 ${customer_dir}/${CUST_NEW_DIR}/dependency.list ${customer_dir}/${CUST_LAST_DIR}/dependency.list)"
+	        deps_removed="$(comm -13 ${customer_dir}/${CUST_NEW_DIR}/dependency.list ${customer_dir}/${CUST_LAST_DIR}/dependency.list)"
+	        echo "      There were changes in package deps"
+	        #echo "ADDED: ${deps_added}"
+	        #echo "REMOVED: ${deps_removed}"
+	        echo "== PACKAGE DEPENDENCIES ADDED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	        echo "${deps_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	        echo "== PACKAGE DEPENDENCIES REMOVED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	        echo "${deps_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	      fi
+	    ;;
+	    package-deps-nvr )
+	      # package-deps-nvr
+	      echo "    Getting latest package deps nvr ..."
+	      dnf --quiet  --config=${REPO_DIR}/${customer_repo_name}.repo  --disablerepo=* --enablerepo=dt-${customer_repo_name} repoquery --requires --tree --resolve "${customer_package_list}" | sed 's/.* \([^ ]*\) \[.*\]$/\1/' | sort -u -o ${customer_dir}/${CUST_NEW_DIR}/dependency.list.nvr
+	      #echo "  Checking deps nvr against last set"
+	      if diff --brief ${customer_dir}/${CUST_NEW_DIR}/dependency.list.nvr ${customer_dir}/${CUST_LAST_DIR}/dependency.list.nvr > /dev/null 2>&1 ; then
+	        echo "      No change in package dep nvrs"
+	      else
+	        things_changed="True"
+	        dep_nvrs_added="$(comm -23 ${customer_dir}/${CUST_NEW_DIR}/dependency.list.nvr ${customer_dir}/${CUST_LAST_DIR}/dependency.list.nvr)"
+	        dep_nvrs_removed="$(comm -13 ${customer_dir}/${CUST_NEW_DIR}/dependency.list.nvr ${customer_dir}/${CUST_LAST_DIR}/dependency.list.nvr)"
+	        echo "      There were changes in package dep nvrs"
+	        #echo "ADDED: ${dep_nvrs_added}"
+	        #echo "REMOVED: ${dep_nvrs_removed}"
+	        echo "== PACKAGE DEPENDENCY NVRS ADDED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	        echo "${dep_nvrs_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	        echo "== PACKAGE DEPENDENCY NVRS REMOVED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	        echo "${dep_nvrs_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	      fi		
+	    ;;
+	    source-nvr )
+	      # source-nvr
+	      # make sure we have the source lists
+	      if ! [ -s ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST}.source ] ; then
+	        generate_source_list ${customer_repo_name} "${customer_dir}/${CUST_NEW_DIR}"
+	      fi
+	      # Do the checks
+	      if diff --brief ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST}.source.nvr ${customer_dir}/${CUST_LAST_DIR}/${CUST_LIST}.source.nvr > /dev/null 2>&1 ; then
+	        echo "      No change in source list nvrs"
+	      else
+	        things_changed="True"
+	        source_nvrs_added="$(comm -23 ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST}.source.nvr ${customer_dir}/${CUST_LAST_DIR}/${CUST_LIST}.source.nvr)"
+	        source_nvrs_removed="$(comm -13 ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST}.source.nvr ${customer_dir}/${CUST_LAST_DIR}/${CUST_LIST}.source.nvr)"
+	        echo "      There were changes in source list nvrs"
+	        #echo "ADDED: ${package_nvrs_added}"
+	        #echo "REMOVED: ${package_nvrs_removed}"
+	        echo "== SOURCE NVRS ADDED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	        echo "${source_nvrs_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	        echo "== SOURCE NVRS REMOVED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	        echo "${source_nvrs_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+        fi
+	    ;;
+	    source-deps )
+	      # source-deps
+	      # make sure we have the source lists
+	      if ! [ -s ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST}.source ] ; then
+	        generate_source_list ${customer_repo_name} "${customer_dir}/${CUST_NEW_DIR}"
+	      fi
+	      echo "    Getting latest source deps ..."
+	      dnf --quiet  --config=${REPO_DIR}/${customer_repo_name}.repo  --disablerepo=* --enablerepo=dt-${customer_repo_name}-source repoquery --requires --tree --resolve --qf='%{name}' "$(cat ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST}.source)" | sed 's/.* \([^ ]*\) \[.*\]$/\1/' | sort -u -o ${customer_dir}/${CUST_NEW_DIR}/source.dependency.list
+	      #echo "  Checking source deps against last set"
+	      if diff --brief ${customer_dir}/${CUST_NEW_DIR}/source.dependency.list ${customer_dir}/${CUST_LAST_DIR}/source.dependency.list > /dev/null 2>&1 ; then
+	        echo "      No change in source deps"
+	      else
+	        things_changed="True"
+	        source_deps_added="$(comm -23 ${customer_dir}/${CUST_NEW_DIR}/source.dependency.list ${customer_dir}/${CUST_LAST_DIR}/source.dependency.list)"
+	        source_deps_removed="$(comm -13 ${customer_dir}/${CUST_NEW_DIR}/source.dependency.list ${customer_dir}/${CUST_LAST_DIR}/source.dependency.list)"
+	        echo "      There were changes in source deps"
+	        #echo "ADDED: ${source_deps_added}"
+	        #echo "REMOVED: ${source_deps_removed}"
+	        echo "== SOURCE DEPENDENCIES ADDED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	        echo "${source_deps_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	        echo "== SOURCE DEPENDENCIES REMOVED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	        echo "${source_deps_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	      fi
+	    ;;
+	    source-deps-nvr )
+	      # source-deps-nvr
+	      # make sure we have the source lists
+	      if ! [ -s ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST}.source ] ; then
+	        generate_source_list ${customer_repo_name} "${customer_dir}/${CUST_NEW_DIR}"
+	      fi
+	      echo "    Getting latest source deps nvr ..."
+	      dnf --quiet  --config=${REPO_DIR}/${customer_repo_name}.repo  --disablerepo=* --enablerepo=dt-${customer_repo_name}-source repoquery --requires --tree --resolve "$(cat ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST}.source)" | sed 's/.* \([^ ]*\) \[.*\]$/\1/' | sort -u -o ${customer_dir}/${CUST_NEW_DIR}/source.dependency.list.nvr
+	      #echo "  Checking source deps nvr against last set"
+	      if diff --brief ${customer_dir}/${CUST_NEW_DIR}/source.dependency.list.nvr ${customer_dir}/${CUST_LAST_DIR}/source.dependency.list.nvr > /dev/null 2>&1 ; then
+	        echo "      No change in source dep nvrs"
+	      else
+	        things_changed="True"
+	        source_dep_nvrs_added="$(comm -23 ${customer_dir}/${CUST_NEW_DIR}/source.dependency.list.nvr ${customer_dir}/${CUST_LAST_DIR}/source.dependency.list.nvr)"
+	        source_dep_nvrs_removed="$(comm -13 ${customer_dir}/${CUST_NEW_DIR}/source.dependency.list.nvr ${customer_dir}/${CUST_LAST_DIR}/source.dependency.list.nvr)"
+	        echo "      There were changes in source dep nvrs"
+	        #echo "ADDED: ${source_dep_nvrs_added}"
+	        #echo "REMOVED: ${source_dep_nvrs_removed}"
+	        echo "== SOURCE DEPENDENCY NVRS ADDED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	        echo "${source_dep_nvrs_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	        echo "== SOURCE DEPENDENCY NVRS REMOVED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	        echo "${source_dep_nvrs_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	      fi		
+	    ;;
+	  esac
+	done
+
+  # If there were changes, do that thing youdo
+	if [ "${things_changed}" == "True" ] ; then
+	  echo "  There were changes."
+		echo "    Archiving last results"
+		mkdir -p ${customer_dir}/archive/${last_change_date}
+		cp ${customer_dir}/${CUST_LAST_DIR}/* ${customer_dir}/archive/${last_change_date}/
+		echo "    Setting new files to be the last ones"
+		rm -f ${customer_dir}/${CUST_LAST_DIR}/*
+		cp ${customer_dir}/${CUST_NEW_DIR}/* ${customer_dir}/${CUST_LAST_DIR}/
+		for action in ${customer_action_list}
+		do
+      case ${action} in
+        email | EMAIL | Email )
+          echo "    Mailling out results"
+          mail -s "Dep Tracker: ${customer} results found" \
+          ${customer_email_list} < ${customer_dir}/${CUST_NEW_DIR}/changes
+        ;;
+        *)
+          echo "    ${action} is not implemented"
+        ;;
+      esac
+		done
+	fi
+done
