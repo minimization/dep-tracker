@@ -16,6 +16,10 @@ The following are requires to run dep-tracker
 * dnf
 * diff
 * comm
+* depchase - https://github.com/fedora-modularity/depchase
+** python3-solv
+** python3-click
+** python3-smartcols
 
 # Customer Configuration Files
 
