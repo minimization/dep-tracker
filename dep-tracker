@@ -6,83 +6,120 @@
 #####
 # Variables
 #####
+TIMESTAMP=$(date +%Y-%m-%d-%H:%M)
 WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 #WORK_DIR="~/.dep-tracker"
-CONF_DIR="${WORK_DIR}/conf"
+#CONF_DIR="${WORK_DIR}/conf"
 CUST_DIR="${WORK_DIR}/customers"
-LOG_DIR="${WORK_DIR}/logs"
 REPO_DIR="${WORK_DIR}/repos"
-LOG_FILE="${LOG_DIR}/dt.logs"
+PACKAGE_DIR="${WORK_DIR}/packages"
+PACKAGE_CONVERT="${PACKAGE_DIR}/convert/convert.package.nvr.name"
+PACKAGE_ARCHIVE_DIR=${PACKAGE_DIR}/archive/${TIMESTAMP}
+#LOG_DIR="${WORK_DIR}/logs"
+#LOG_FILE="${LOG_DIR}/dt.logs"
 CUST_CONF="dt.conf"
 CUST_LIST="package.list"
 CUST_NEW_DIR="new"
 CUST_LAST_DIR="last"
-DEPCHASE_REPO_DIR="/tmp/depchase_repos"
+DNF_OPTIONS=" -c ${REPO_DIR}/rawhide.repo --disablerepo=* --enablerepo=dt-rawhide --enablerepo=dt-rawhide-source "
+DNF_SOURCE_ONLY_OPTIONS=" -c ${REPO_DIR}/rawhide.repo --disablerepo=* --enablerepo=dt-rawhide-source "
+# BINARY VARIABLES
+VERBOSE="FALSE"
+LAYERS="TRUE"
+# LIST VARIABLES
+ORIGINAL_LIST=()
+SOURCE_LIST=()
+BINARY_LIST=()
+LAYER=1
 
 #####
 # Setup
 #####
 #dnf --quiet clean all
-#mkdir -p ${DEPCHASE_REPO_DIR}
+mkdir -p 
 
-#####
-# Generate list of source rpms from package list
-#   This only gets called if source is being checked
-#   on the check list
-#####
-generate_source_list(){
-  echo "    Getting source list and source list nvr ..."
-  this_repo="${1}"
-  this_work_dir="${2}"
-  dnf --quiet --config=${REPO_DIR}/${this_repo}.repo  --disablerepo=* --enablerepo=dt-${this_repo} repoquery --qf="%{SOURCERPM}" $(cat ${this_work_dir}/${CUST_LIST}) | sed "s/.src.rpm$//" | sort -u -o ${this_work_dir}/${CUST_LIST}.source.nvr
-  dnf --quiet --config=${REPO_DIR}/${this_repo}.repo  --disablerepo=* --enablerepo=dt-${this_repo}-source repoquery --qf="%{NAME}" $(cat ${this_work_dir}/${CUST_LIST}.source.nvr) | sort -u -o ${this_work_dir}/${CUST_LIST}.source
+# Given a list of source name, archive then update the package info
+archive_and_update(){
+  this_source="${1}"
+  if [ "${this_source}" == "" ] ; then
+    echo "archive_and_update needs a source, nothing was provided"
+    return 1
+  fi
+  mkdir -p ${PACKAGE_ARCHIVE_DIR}
+  if [ -f  ${PACKAGE_DIR}/${this_source} ] && [ -f  ${PACKAGE_ARCHIVE_DIR}/${this_source} ] ; then
+    # the source has already been archived, nothing to do
+    return 0
+  else
+    if [ -f  ${PACKAGE_DIR}/${this_source} ] ; then
+      mv ${PACKAGE_DIR}/${this_source} ${PACKAGE_ARCHIVE_DIR}/${this_source}
+    fi
+    dnf ${DNF_OPTIONS} repoquery --qf="%{name}" list  $(dnf ${DNF_OPTIONS}  repoquery --srpm --qf="%{sourcerpm}" --requires --resolve ${this_source} 2>/dev/null | grep -v Subscription | sed "s/.rpm$//") 2>/dev/null | grep -v Subscription | sort -u -o ${PACKAGE_DIR}/${this_source}
+  fi
+  return 0
 }
 
-#####
-# Depchase doesn't automatically get the latest repo
-#   Pull down the latest repo for depchase
-#####
-update_depchase_repo(){
-  this_repo="${1}"
-  echo "  Updating depchase repo for ${this_repo} ..."
-  source ${REPO_DIR}/depchase-${this_repo}.vars
-  mkdir -p ${DEPCHASE_REPO_DIR}/${this_repo}/{sources,x86_64}/repodata
-  rm -f ${DEPCHASE_REPO_DIR}/${this_repo}/{sources,x86_64}/repodata/*
-  for this_file in repomd.xml $(curl ${SOURCE_URL} 2>/dev/null | grep -e primary.xml.gz -e filelists.xml.gz | cut -d'>' -f2 | cut -d'"' -f2)
-  do
-    wget --quiet -O ${DEPCHASE_REPO_DIR}/${this_repo}/sources/repodata/${this_file} ${SOURCE_URL}${this_file}
-  done
-  for this_arch in x86_64
-  do
-    for this_file in repomd.xml $(curl ${ARCH_URL_BASE}${this_arch}${ARCH_URL_END} 2>/dev/null | grep -e primary.xml.gz -e filelists.xml.gz | cut -d'>' -f2 | cut -d'"' -f2)
+# Given a list of binary packages, get the source name, and add it to the source_list
+get_source_name(){
+  if [ "${VERBOSE}" == "TRUE" ] ; then
+        echo "   GATHERING SOURCE NAMES FROM LIST OF BINARIES"
+  fi
+  #echo "  this_source_name= (dnf ${DNF_OPTIONS} repoquery --qf %{name} (dnf ${DNF_OPTIONS} repoquery --qf %{sourcerpm} $@ 2>/dev/null| sed 's/.rpm$//') 2>/dev/null)"
+  this_source_name="$(dnf ${DNF_OPTIONS} repoquery --qf %{name} $(dnf ${DNF_OPTIONS} repoquery --qf %{sourcerpm} $@ 2>/dev/null| grep -v -e ^None$ -e "Subscription Management" | sed 's/.rpm$//') 2>/dev/null | grep -v -e ^None$ -e "Subscription Management")"
+  for this_source in ${this_source_name[@]}
+   do
+    #echo "    SOURCE: ${this_source}"
+    if [[ ! " ${SOURCE_LIST[@]} " =~ " ${this_source} " ]]; then
+      if [ "${VERBOSE}" == "TRUE" ] ; then
+        echo "    ADDING SOURCE: ${this_source}"
+      fi
+      SOURCE_LIST+=("${this_source}")
+      #if [ "${LAYERS}" == "TRUE" ] ; then
+      #  echo ${this_source} >> ${OUTPUT_FILE}.layer${LAYER}
+      #fi
+    fi
+   done
+}
+
+convert_source_to_name(){
+  #if [ "${VERBOSE}" == "TRUE" ] ; then
+        echo "   CONVERTING SOURCE NVRs TO NAMES"
+  #fi
+  file_in="${1}"
+  file_out="${2}"
+  if [ "${file_in}" == "" ] || [ "${file_out}" == "" ] ; then
+    echo "ERROR: convert_source_to_name needs two filenames - received: ${file_in} and ${file_out}"
+    exit 21
+  fi
+  rm -f ${file_out}
+  if ! touch ${file_out} ; then
+    echo "ERROR: cannot use output file: ${file_out}"
+    exit 22
+  fi
+  if [ -s ${file_in} ] ; then
+    cat ${file_in} | while read this_line
     do
-      wget --quiet -O ${DEPCHASE_REPO_DIR}/${this_repo}/${this_arch}/repodata/${this_file} ${ARCH_URL_BASE}${this_arch}${ARCH_URL_END}${this_file}
-    done
-  done
+       binary_name=$(echo "${this_line}" | awk '{print $1}')
+       source_nvr=$(echo "${this_line}" | awk '{print $2}')
+       source_name=$(grep "^${source_nvr} " ${PACKAGE_CONVERT} | awk '{print $2}')
+       if [ "${source_name}" == "" ] ; then
+         new_source_nvr=$(echo ${source_nvr} | sed 's/.rpm$//')
+         source_name=$(dnf ${DNF_OPTIONS} repoquery --qf %{name} ${new_source_nvr} 2>/dev/null | grep -v -e ^None$ -e "Subscription Management")
+         if [ "${source_name}" == "" ] ; then
+           echo "     ERROR: No Source name found for: ${source_nvr}"
+         else
+           #if [ "${VERBOSE}" == "TRUE" ] ; then
+             echo "     New Package: ${source_nvr} ${source_name}"
+           #fi
+           echo "${source_nvr} ${source_name}" >> ${PACKAGE_CONVERT}
+         fi
+       fi
+       echo "${binary_name} ${source_name}" >> ${file_out}
+     done
+  else
+    echo "ERROR: No file with content: ${file_in}"
+    exit 24
+  fi
 }
-
-#####
-# Run depchase, sort the output into various files
-#####
-run_depchase(){
-  this_repo="${1}"
-  this_customer="${2}"
-  this_customer_dir="${CUST_DIR}/${this_customer}"
-  new_customer_dir="${CUST_DIR}/${this_customer}/${CUST_NEW_DIR}"
-  echo "  Running depchase for ${this_customer} on repo ${this_repo} ..."
-  depchase -a x86_64 -c ${REPO_DIR}/depchase-${this_repo}.cfg resolve $(cat ${this_customer_dir}/${CUST_LIST}) | while read -r nevra
-  do
-    [[ "${nevra}" == *.src || "${nevra}" == *.nosrc ]] && type_="source" || type_="binary"
-    name=${nevra%-*-*}
-    echo "${nevra}" >> ${new_customer_dir}/${type_}-packages-full.txt
-    echo "${name}" >> ${new_customer_dir}/${type_}-packages-short.txt
-  done
-  for f in ${new_customer_dir}/{binary,source}-packages-{full,short}.txt
-  do
-    sort -u $f -o $f 2>/dev/null
-  done
-}
-
 
 #####
 # Work
@@ -91,8 +128,13 @@ run_depchase(){
 # Get list of customers to check for
 for customer in $(ls -1 ${CUST_DIR})
 do
-  # Customer Setup
   echo "Customer: ${customer}"
+  # Customer Setup
+  ORIGINAL_LIST=()
+  SOURCE_LIST=()
+  BINARY_LIST=()
+  LAYER=1
+
   customer_dir="${CUST_DIR}/${customer}"
   things_changed="False"
   depchase_repo_updated="False"
@@ -105,23 +147,13 @@ do
 	  last_check_date="$(cat ${customer_dir}/${CUST_NEW_DIR}/date.check)"
   fi
 	rm -f ${customer_dir}/${CUST_NEW_DIR}/*
-	date +%Y-%m-%d-%R-%Z > ${customer_dir}/${CUST_NEW_DIR}/date.check
+	echo "${TIMESTAMP}" > ${customer_dir}/${CUST_NEW_DIR}/date.check
 	cp ${customer_dir}/${CUST_LIST} ${customer_dir}/${CUST_NEW_DIR}/
 
   # Customer Conf Parsing
-  customer_package_list="$(cat ${customer_dir}/${CUST_LIST})"
+  ORIGINAL_LIST="$(cat ${customer_dir}/${CUST_LIST})"
   customer_email_list="$(grep ^Email: ${customer_dir}/${CUST_CONF} | cut -d' ' -f2-)"
   customer_action_list="$(grep ^Action: ${customer_dir}/${CUST_CONF} | cut -d' ' -f2-)"
-  customer_repo_name="$(grep ^Repo: ${customer_dir}/${CUST_CONF} | cut -d' ' -f2-)"
-  customer_check_list="$(grep ^Checks: ${customer_dir}/${CUST_CONF} | cut -d' ' -f2-)"
-  #echo "  Email List: ${customer_email_list}"
-  #echo "  Action List: ${customer_action_list}"
-  #echo "  Repo Name: ${customer_repo_name}"
-  #echo "  Check List: ${customer_check_list}"
-  #echo "  Package List: ${customer_package_list}"
-  #echo
-
-
 
 	# Do the checks
 	echo "  Checking ..."
@@ -143,161 +175,103 @@ do
 	  echo  >> ${customer_dir}/${CUST_NEW_DIR}/changes
 	fi
 
-	for check in ${customer_check_list}
-	do
-	  case ${check} in
-	    package-nvr )
-	      # package-nvr
-	      echo "    Getting package list nvr ..."
-	      dnf --quiet --config=${REPO_DIR}/${customer_repo_name}.repo  --disablerepo=* --enablerepo=dt-${customer_repo_name} repoquery --qf="%{name}-%{version}-%{release}" ${customer_package_list} >> ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST}.nvr
-	      #echo "  Checking if package list nvrs has changed"
-	      if diff --brief ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST}.nvr ${customer_dir}/${CUST_LAST_DIR}/${CUST_LIST}.nvr > /dev/null 2>&1 ; then
-	        echo "      No change in package list nvrs"
-	      else
-	        things_changed="True"
-	        package_nvrs_added="$(comm -23 ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST}.nvr ${customer_dir}/${CUST_LAST_DIR}/${CUST_LIST}.nvr 2>/dev/null)"
-	        package_nvrs_removed="$(comm -13 ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST}.nvr ${customer_dir}/${CUST_LAST_DIR}/${CUST_LIST}.nvr 2>/dev/null)"
-	        echo "      There were changes in package list nvrs"
-	        #echo "ADDED: ${package_nvrs_added}"
-	        #echo "REMOVED: ${package_nvrs_removed}"
-	        echo "== PACKAGE NVRS ADDED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	        echo "${package_nvrs_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	        echo "== PACKAGE NVRS REMOVED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	        echo "${package_nvrs_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	      fi
-	    ;;
-	    package-deps )
-	      # package-deps
-	      # Get the latest overall deps
-	      #echo "    Getting latest package deps ..."
-        if [ "${depchase_repo_updated}" == "False" ] ; then
-          update_depchase_repo ${customer_repo_name}
-          depchase_repo_updated="True"
-        fi
-        if ! [ -s ${customer_dir}/${CUST_NEW_DIR}/binary-packages-short.txt ] ; then
-          run_depchase ${customer_repo_name} ${customer}
-        fi
-	      echo "  Checking package deps against last set"
-	      if diff --brief ${customer_dir}/${CUST_NEW_DIR}/binary-packages-short.txt ${customer_dir}/${CUST_LAST_DIR}/binary-packages-short.txt > /dev/null 2>&1 ; then
-	        echo "      No change in package deps"
-	      else
-	        things_changed="True"
-	        deps_added="$(comm -23 ${customer_dir}/${CUST_NEW_DIR}/binary-packages-short.txt ${customer_dir}/${CUST_LAST_DIR}/binary-packages-short.txt 2>/dev/null)"
-	        deps_removed="$(comm -13 ${customer_dir}/${CUST_NEW_DIR}/binary-packages-short.txt ${customer_dir}/${CUST_LAST_DIR}/binary-packages-short.txt 2>/dev/null)"
-	        echo "      There were changes in package deps"
-	        #echo "ADDED: ${deps_added}"
-	        #echo "REMOVED: ${deps_removed}"
-	        echo "== PACKAGE DEPENDENCIES ADDED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	        echo "${deps_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	        echo "== PACKAGE DEPENDENCIES REMOVED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	        echo "${deps_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	      fi
-	    ;;
-	    package-deps-nvr )
-	      # package-deps-nvr
-	      #echo "    Getting latest package deps nvr ..."
-        if [ "${depchase_repo_updated}" == "False" ] ; then
-          update_depchase_repo ${customer_repo_name}
-          depchase_repo_updated="True"
-        fi
-        if ! [ -s ${customer_dir}/${CUST_NEW_DIR}/binary-packages-full.txt ] ; then
-          run_depchase ${customer_repo_name} ${customer}
-        fi
-	      echo "  Checking package deps nvr against last set"
-	      if diff --brief ${customer_dir}/${CUST_NEW_DIR}/binary-packages-full.txt ${customer_dir}/${CUST_LAST_DIR}/binary-packages-full.txt > /dev/null 2>&1 ; then
-	        echo "      No change in package dep nvrs"
-	      else
-	        things_changed="True"
-	        dep_nvrs_added="$(comm -23 ${customer_dir}/${CUST_NEW_DIR}/binary-packages-full.txt ${customer_dir}/${CUST_LAST_DIR}/binary-packages-full.txt 2>/dev/null)"
-	        dep_nvrs_removed="$(comm -13 ${customer_dir}/${CUST_NEW_DIR}/binary-packages-full.txt ${customer_dir}/${CUST_LAST_DIR}/binary-packages-full.txt 2>/dev/null)"
-	        echo "      There were changes in package dep nvrs"
-	        #echo "ADDED: ${dep_nvrs_added}"
-	        #echo "REMOVED: ${dep_nvrs_removed}"
-	        echo "== PACKAGE DEPENDENCY NVRS ADDED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	        echo "${dep_nvrs_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	        echo "== PACKAGE DEPENDENCY NVRS REMOVED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	        echo "${dep_nvrs_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	      fi
-	    ;;
-	    source-nvr )
-	      # source-nvr
-	      # make sure we have the source lists
-	      if ! [ -s ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST}.source ] ; then
-	        generate_source_list ${customer_repo_name} "${customer_dir}/${CUST_NEW_DIR}"
-	      fi
-	      # Do the checks
-	      if diff --brief ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST}.source.nvr ${customer_dir}/${CUST_LAST_DIR}/${CUST_LIST}.source.nvr > /dev/null 2>&1 ; then
-	        echo "      No change in source list nvrs"
-	      else
-	        things_changed="True"
-	        source_nvrs_added="$(comm -23 ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST}.source.nvr ${customer_dir}/${CUST_LAST_DIR}/${CUST_LIST}.source.nvr 2>/dev/null)"
-	        source_nvrs_removed="$(comm -13 ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST}.source.nvr ${customer_dir}/${CUST_LAST_DIR}/${CUST_LIST}.source.nvr 2>/dev/null)"
-	        echo "      There were changes in source list nvrs"
-	        #echo "ADDED: ${package_nvrs_added}"
-	        #echo "REMOVED: ${package_nvrs_removed}"
-	        echo "== SOURCE NVRS ADDED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	        echo "${source_nvrs_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	        echo "== SOURCE NVRS REMOVED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	        echo "${source_nvrs_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-        fi
-	    ;;
-	    source-deps )
-	      # source-deps
-	      # make sure we have the source lists
-	      #echo "    Getting latest source deps ..."
-        if [ "${depchase_repo_updated}" == "False" ] ; then
-          update_depchase_repo ${customer_repo_name}
-          depchase_repo_updated="True"
-        fi
-        if ! [ -s ${customer_dir}/${CUST_NEW_DIR}/source-packages-short.txt ] ; then
-          run_depchase ${customer_repo_name} ${customer}
-        fi
-	      echo "  Checking source deps against last set"
-	      if diff --brief ${customer_dir}/${CUST_NEW_DIR}/source-packages-short.txt ${customer_dir}/${CUST_LAST_DIR}/source-packages-short.txt > /dev/null 2>&1 ; then
-	        echo "      No change in source deps"
-	      else
-	        things_changed="True"
-	        source_deps_added="$(comm -23 ${customer_dir}/${CUST_NEW_DIR}/source-packages-short.txt ${customer_dir}/${CUST_LAST_DIR}/source-packages-short.txt 2>/dev/null)"
-	        source_deps_removed="$(comm -13 ${customer_dir}/${CUST_NEW_DIR}/source-packages-short.txt ${customer_dir}/${CUST_LAST_DIR}/source-packages-short.txt 2>/dev/null)"
-	        echo "      There were changes in source deps"
-	        #echo "ADDED: ${source_deps_added}"
-	        #echo "REMOVED: ${source_deps_removed}"
-	        echo "== SOURCE DEPENDENCIES ADDED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	        echo "${source_deps_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	        echo "== SOURCE DEPENDENCIES REMOVED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	        echo "${source_deps_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	      fi
-	    ;;
-	    source-deps-nvr )
-	      # source-deps-nvr
-	      #echo "    Getting latest source deps nvr ..."
-        if [ "${depchase_repo_updated}" == "False" ] ; then
-          update_depchase_repo ${customer_repo_name}
-          depchase_repo_updated="True"
-        fi
-        if ! [ -s ${customer_dir}/${CUST_NEW_DIR}/source-packages-full.txt ] ; then
-          run_depchase ${customer_repo_name} ${customer}
-        fi
-	      echo "  Checking source deps nvr against last set"
-	      if diff --brief ${customer_dir}/${CUST_NEW_DIR}/source-packages-full.txt ${customer_dir}/${CUST_LAST_DIR}/source-packages-full.txt > /dev/null 2>&1 ; then
-	        echo "      No change in source dep nvrs"
-	      else
-	        things_changed="True"
-	        source_dep_nvrs_added="$(comm -23 ${customer_dir}/${CUST_NEW_DIR}/source-packages-full.txt ${customer_dir}/${CUST_LAST_DIR}/source-packages-full.txt 2>/dev/null)"
-	        source_dep_nvrs_removed="$(comm -13 ${customer_dir}/${CUST_NEW_DIR}/source-packages-full.txt ${customer_dir}/${CUST_LAST_DIR}/source-packages-full.txt 2>/dev/null)"
-	        echo "      There were changes in source dep nvrs"
-	        #echo "ADDED: ${source_dep_nvrs_added}"
-	        #echo "REMOVED: ${source_dep_nvrs_removed}"
-	        echo "== SOURCE DEPENDENCY NVRS ADDED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	        echo "${source_dep_nvrs_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	        echo "== SOURCE DEPENDENCY NVRS REMOVED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	        echo "${source_dep_nvrs_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	      fi
-	    ;;
-	  esac
-	done
+  ## Find the buildroot for the packages
+  if [ ${#ORIGINAL_LIST[@]} -le 0 ] ; then
+    echo "NO PACKAGES LISTED"
+    echo
+    usage
+    exit 5
+  else
+    if [ "${VERBOSE}" == "TRUE" ] ; then
+      echo "Original Binaries: ${ORIGINAL_LIST[@]}"
+      get_source_name "${ORIGINAL_LIST[@]}"
+      echo "Initial Source List: ${SOURCE_LIST[@]}"
+    else
+      get_source_name "${ORIGINAL_LIST[@]}"
+    fi
+  fi
 
-  # If there were changes, do that thing youdo
+  # Loop through until we no longer add sources
+  number_sources=${#SOURCE_LIST[@]}
+  number_new_sources=${number_sources}
+  while [ ${number_new_sources} -ge 1 ]
+  do
+    if [ "${VERBOSE}" == "TRUE" ] || [ "${LAYERS}" == "TRUE" ] ; then
+      echo "Layer: ${LAYER} Number Sources: ${number_sources} New Sources: ${number_new_sources}"
+    fi
+    let LAYER=${LAYER}+1
+  
+    get_source_name "$(dnf ${DNF_OPTIONS} repoquery --srpm --qf %{name} --requires --resolve ${SOURCE_LIST[@]} 2>/dev/null)"
+  
+    new_number_sources=${#SOURCE_LIST[@]}
+    let number_new_sources=${new_number_sources}-${number_sources}
+    number_sources=${new_number_sources}
+  done
+  
+  # Write it all out
+  printf "%s\n" "${SOURCE_LIST[@]}" | sort -o ${customer_dir}/${CUST_NEW_DIR}/source-packages-name.txt
+  
+  # Check if there were changes
+  echo "  Checking source deps against last set"
+  if diff --brief ${customer_dir}/${CUST_NEW_DIR}/source-packages-name.txt ${customer_dir}/${CUST_LAST_DIR}/source-packages-name.txt > /dev/null 2>&1 ; then
+    echo "      No change in source deps"
+    cp ${customer_dir}/${CUST_LAST_DIR}/binary-source-name.txt ${customer_dir}/${CUST_NEW_DIR}/binary-source-name.txt
+  else
+    things_changed="True"
+    source_deps_added="$(comm -23 ${customer_dir}/${CUST_NEW_DIR}/source-packages-name.txt ${customer_dir}/${CUST_LAST_DIR}/source-packages-name.txt 2>/dev/null)"
+    source_deps_removed="$(comm -13 ${customer_dir}/${CUST_NEW_DIR}/source-packages-name.txt ${customer_dir}/${CUST_LAST_DIR}/source-packages-name.txt 2>/dev/null)"
+    echo "      There were changes in source deps"
+    #echo "ADDED: ${source_deps_added}"
+    #echo "REMOVED: ${source_deps_removed}"
+    # Update all added and removed source deps
+    for changed_source in $(echo ${source_deps_added} ${source_deps_removed})
+      do
+        archive_and_update ${changed_source}
+      done
+
+    # Work on added source deps
+    if ! [ "${source_deps_added}" == "" ] ; then
+      echo "        Added packages"
+      # Update binary-source-name.txt
+      dnf ${DNF_OPTIONS} repoquery --srpm --qf "%{name} %{sourcerpm}" --requires --resolve ${SOURCE_LIST[@]} 2>/dev/null | grep -v -e ^None$ -e "Subscription Management" | sort -o ${customer_dir}/${CUST_NEW_DIR}/binary-source-name.txt.tmp
+      convert_source_to_name ${customer_dir}/${CUST_NEW_DIR}/binary-source-name.txt.tmp ${customer_dir}/${CUST_NEW_DIR}/binary-source-name.txt
+      rm -f ${customer_dir}/${CUST_NEW_DIR}/binary-source-name.txt.tmp
+      # Work with added sources
+      echo "${source_deps_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes.sources.added
+      echo "== SOURCE DEPENDENCIES ADDED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+      for added_source in $(echo ${source_deps_added})
+      do
+        echo "${added_source}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+        for added_binary in $(grep " ${added_source}$" ${customer_dir}/${CUST_NEW_DIR}/binary-source-name.txt | awk '{print $1}')
+          do
+            for wants_added in $(dnf ${DNF_SOURCE_ONLY_OPTIONS} repoquery --qf "%{name}" --whatrequires ${added_binary} 2>/dev/null | grep -v -e ^None$ -e "Subscription Management")
+              do
+                echo "- ${wants_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+                archive_and_update ${wants_added}
+              done
+          done
+      done
+    fi
+    # Work on removed source deps
+    if ! [ "${source_deps_removed}" == "" ] ; then
+      echo "        Removed packages"
+      # Work with removed sources
+      echo "${source_deps_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes.sources.removed
+      echo "== SOURCE DEPENDENCIES REMOVED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+      for removed_source in $(echo ${source_deps_removed})
+      do
+        echo "${removed_source}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+        archive_and_update ${removed_source}
+        for wants_removed in $(grep -l ^${removed_source}$ ${PACKAGE_ARCHIVE_DIR}/* ${PACKAGE_DIR}/* 2>/dev/null | awk -F "/" '{print $NF}' | sort -u)
+        do
+          echo "- ${wants_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+          archive_and_update ${wants_removed}
+        done
+      done
+    fi
+  fi
+
+  # If there were changes, do that thing you do
 	if [ "${things_changed}" == "True" ] ; then
 	  echo "  There were changes."
 		echo "    Archiving last results"
@@ -310,6 +284,10 @@ do
 		do
       case ${action} in
         email | EMAIL | Email )
+          echo "    Mailling out results"
+          #mail -s "Dep Tracker: ${customer} results found" ${customer_email_list} < ${customer_dir}/${CUST_NEW_DIR}/changes
+        ;;
+        package | packages | Package )
           echo "    Mailling out results"
           #mail -s "Dep Tracker: ${customer} results found" ${customer_email_list} < ${customer_dir}/${CUST_NEW_DIR}/changes
         ;;
