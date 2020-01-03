@@ -172,12 +172,12 @@ do
 	  #echo "ADDED: ${packages_added}"
 	  #echo "REMOVED: ${packages_removed}"
     if ! [ "${packages_added}" == "" ] ; then
-	    echo "== BINARY PACKAGES ADDED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	    echo "${packages_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	    echo "# BINARY PACKAGES ADDED" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	    echo "* ${packages_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
     fi
     if ! [ "${packages_removed}" == "" ] ; then
-	    echo "== BINARY PACKAGES REMOVED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	    echo "${packages_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	    echo "# BINARY PACKAGES REMOVED" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	    echo "* ${packages_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
   	fi
 	  echo  >> ${customer_dir}/${CUST_NEW_DIR}/changes
 	fi
@@ -250,17 +250,17 @@ do
       rm -f ${customer_dir}/${CUST_NEW_DIR}/binary-source-name.txt.tmp
       # Work with added sources
       echo "${source_deps_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes.sources.added
-      echo "== SOURCE DEPENDENCIES ADDED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+      echo "# SOURCE DEPENDENCIES ADDED" >> ${customer_dir}/${CUST_NEW_DIR}/changes
       for added_source in $(echo ${source_deps_added})
       do
-        echo "${added_source}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+        echo "* ${added_source}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
         for added_binary in $(grep " ${added_source}$" ${customer_dir}/${CUST_NEW_DIR}/binary-source-name.txt | awk '{print $1}')
           do
             for wants_added in $(dnf ${DNF_SOURCE_ONLY_OPTIONS} repoquery --qf "%{name}" --whatrequires ${added_binary} 2>/dev/null | grep -v -e ^None$ -e "Subscription Management")
               do
                 # Only work with packages we already know about.  Otherwise you end up with everything.
                 if [ -f  ${PACKAGE_DIR}/${wants_added} ] || [ -f  ${PACKAGE_ARCHIVE_DIR}/${wants_added} ] ; then
-                  echo "- ${wants_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+                  echo "  * ${wants_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
                   archive_and_update ${wants_added}
                 fi
               done
@@ -272,13 +272,13 @@ do
       echo "        Removed packages"
       # Work with removed sources
       echo "${source_deps_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes.sources.removed
-      echo "== SOURCE DEPENDENCIES REMOVED ==" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+      echo "# SOURCE DEPENDENCIES REMOVED" >> ${customer_dir}/${CUST_NEW_DIR}/changes
       for removed_source in $(echo ${source_deps_removed})
       do
-        echo "${removed_source}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+        echo "* ${removed_source}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
         for wants_removed in $(grep -l ^${removed_source}$ ${PACKAGE_ARCHIVE_DIR}/* ${PACKAGE_DIR}/* 2>/dev/null | awk -F "/" '{print $NF}' | sort -u)
         do
-          echo "- ${wants_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+          echo "  * ${wants_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
           archive_and_update ${wants_removed}
         done
         rm -f ${PACKAGE_DIR}/${removed_source}
