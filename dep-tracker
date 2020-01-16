@@ -9,18 +9,18 @@
 TIMESTAMP=$(date +%Y-%m-%d-%H:%M)
 WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 #WORK_DIR="~/.dep-tracker"
-#CONF_DIR="${WORK_DIR}/conf"
-CUST_DIR="${WORK_DIR}/customers"
+CONF_DIR="${WORK_DIR}/conf"
+DATA_DIR="${WORK_DIR}/data"
 REPO_DIR="${WORK_DIR}/repos"
 PACKAGE_DIR="${WORK_DIR}/packages"
 PACKAGE_CONVERT="${PACKAGE_DIR}/convert/convert.package.nvr.name"
 PACKAGE_ARCHIVE_DIR=${PACKAGE_DIR}/archive/${TIMESTAMP}
 #LOG_DIR="${WORK_DIR}/logs"
 #LOG_FILE="${LOG_DIR}/dt.logs"
-CUST_CONF="dt.conf"
-CUST_LIST="package.list"
-CUST_NEW_DIR="new"
-CUST_LAST_DIR="last"
+MAIN_CONF="dt.conf"
+PACKAGE_LIST="buildroot-initial-binary-package-list.txt"
+NEW_DIR="new"
+LAST_DIR="last"
 DNF_OPTIONS=" -c ${REPO_DIR}/rawhide.repo --disablerepo=* --enablerepo=dt-rawhide --enablerepo=dt-rawhide-source "
 DNF_SOURCE_ONLY_OPTIONS=" -c ${REPO_DIR}/rawhide.repo --disablerepo=* --enablerepo=dt-rawhide-source "
 # BINARY VARIABLES
@@ -31,12 +31,6 @@ ORIGINAL_LIST=()
 SOURCE_LIST=()
 BINARY_LIST=()
 LAYER=1
-
-#####
-# Setup
-#####
-#dnf --quiet clean all
-mkdir -p ${PACKAGE_DIR}/convert
 
 # Given a list of source name, archive then update the package info
 archive_and_update(){
@@ -122,77 +116,72 @@ convert_source_to_name(){
 }
 
 #####
+# Setup
+#####
+#dnf --quiet clean all
+ORIGINAL_LIST=()
+SOURCE_LIST=()
+BINARY_LIST=()
+LAYER=1
+things_changed="False"
+if ! [ -d ${DATA_DIR}/archive ] ; then
+  mkdir -p ${DATA_DIR}/{archive,logs,${NEW_DIR},${LAST_DIR}}
+  mkdir -p ${PACKAGE_DIR}/convert
+  last_change_date="NEVER"
+else
+  last_change_date="$(cat ${DATA_DIR}/${LAST_DIR}/buildroot-date-check.txt)"
+fi
+rm -f ${DATA_DIR}/${NEW_DIR}/*
+echo "${TIMESTAMP}" > ${DATA_DIR}/${NEW_DIR}/buildroot-date-check.txt
+cp ${CONF_DIR}/${PACKAGE_LIST} ${DATA_DIR}/${NEW_DIR}/
+# Conf Parsing
+ORIGINAL_LIST="$(cat ${CONF_DIR}/${PACKAGE_LIST})"
+email_list="$(grep ^Email: ${CONF_DIR}/${MAIN_CONF} | cut -d' ' -f2-)"
+action_list="$(grep ^Action: ${CONF_DIR}/${MAIN_CONF} | cut -d' ' -f2-)"
+
+#####
 # Work
 #####
+# Do the checks
+echo "  Checking ..."
+echo "# Buildroot Source Changes" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+echo "Checked on ${TIMESTAMP}" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+echo "" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+echo "Last time there was a change was [${last_change_date}](https://github.com/minimization/square1-results/blob/master/docs/archives/${last_change_date}/data/buildroot-changes.md)" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
 
-# Get list of customers to check for
-for customer in $(ls -1 ${CUST_DIR})
-do
-  echo "Customer: ${customer}"
-  # Customer Setup
-  ORIGINAL_LIST=()
-  SOURCE_LIST=()
-  BINARY_LIST=()
-  LAYER=1
-
-  customer_dir="${CUST_DIR}/${customer}"
-  things_changed="False"
-  depchase_repo_updated="False"
-  if ! [ -d ${customer_dir}/archive ] ; then
-    mkdir -p ${customer_dir}/{archive,logs,${CUST_NEW_DIR},${CUST_LAST_DIR}}
-	  last_change_date="NEVER"
-	else
-	  last_change_date="$(cat ${customer_dir}/${CUST_LAST_DIR}/date.check)"
-  fi
-	rm -f ${customer_dir}/${CUST_NEW_DIR}/*
-	echo "${TIMESTAMP}" > ${customer_dir}/${CUST_NEW_DIR}/date.check
-	cp ${customer_dir}/${CUST_LIST} ${customer_dir}/${CUST_NEW_DIR}/
-
-  # Customer Conf Parsing
-  ORIGINAL_LIST="$(cat ${customer_dir}/${CUST_LIST})"
-  customer_email_list="$(grep ^Email: ${customer_dir}/${CUST_CONF} | cut -d' ' -f2-)"
-  customer_action_list="$(grep ^Action: ${customer_dir}/${CUST_CONF} | cut -d' ' -f2-)"
-
-	# Do the checks
-	echo "  Checking ..."
-  echo "# Buildroot Source Changes" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-  echo "Checked on ${TIMESTAMP}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-  echo "" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-  echo "Compared with check from last_change_date" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-
-	# Default: Always check if the customers package list has changed
-	if diff --brief ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST} ${customer_dir}/${CUST_LAST_DIR}/${CUST_LIST} > /dev/null 2>&1 ; then
+# Default: Always check if the package list has changed
+if diff --brief ${DATA_DIR}/${NEW_DIR}/${PACKAGE_LIST} ${DATA_DIR}/${LAST_DIR}/${PACKAGE_LIST} > /dev/null 2>&1 ; then
 	  echo "    No change in package list"
-	else
+else
 	  things_changed="True"
 	  echo "    There were changes in the package list"
     if [ "${last_change_date}" == "NEVER" ] ; then
-      packages_added="$(cat ${customer_dir}/${CUST_LIST})"
+      packages_added="$(cat ${CONF_DIR}/${PACKAGE_LIST})"
       packages_removed=""
     else
-	    packages_added="$(comm -23 ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST} ${customer_dir}/${CUST_LAST_DIR}/${CUST_LIST} 2>/dev/null)"
-	    packages_removed="$(comm -13 ${customer_dir}/${CUST_NEW_DIR}/${CUST_LIST} ${customer_dir}/${CUST_LAST_DIR}/${CUST_LIST} 2>/dev/null)"
+	    packages_added="$(comm -23 ${DATA_DIR}/${NEW_DIR}/${PACKAGE_LIST} ${DATA_DIR}/${LAST_DIR}/${PACKAGE_LIST} 2>/dev/null)"
+	    packages_removed="$(comm -13 ${DATA_DIR}/${NEW_DIR}/${PACKAGE_LIST} ${DATA_DIR}/${LAST_DIR}/${PACKAGE_LIST} 2>/dev/null)"
 	  fi
 	  #echo "ADDED: ${packages_added}"
 	  #echo "REMOVED: ${packages_removed}"
     if ! [ "${packages_added}" == "" ] ; then
-	    echo "## BINARY PACKAGES ADDED" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	    echo "* ${packages_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	    echo "## BINARY PACKAGES ADDED" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+	    echo "* ${packages_added}" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
     fi
     if ! [ "${packages_removed}" == "" ] ; then
-	    echo "## BINARY PACKAGES REMOVED" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	    echo "* ${packages_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+	    echo "## BINARY PACKAGES REMOVED" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+	    echo "* ${packages_removed}" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
   	fi
-	  echo  >> ${customer_dir}/${CUST_NEW_DIR}/changes
-	fi
+	  echo  >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+fi
 
-  ## Find the buildroot for the packages
-  if [ ${#ORIGINAL_LIST[@]} -le 0 ] ; then
+## Find the sources for the original packages
+if [ ${#ORIGINAL_LIST[@]} -le 0 ] ; then
     echo "NO PACKAGES LISTED"
     echo
     usage
     exit 5
-  else
+else
     if [ "${VERBOSE}" == "TRUE" ] ; then
       echo "Original Binaries: ${ORIGINAL_LIST[@]}"
       get_source_name "${ORIGINAL_LIST[@]}"
@@ -200,13 +189,13 @@ do
     else
       get_source_name "${ORIGINAL_LIST[@]}"
     fi
-  fi
+fi
 
-  # Loop through until we no longer add sources
-  number_sources=${#SOURCE_LIST[@]}
-  number_new_sources=${number_sources}
-  while [ ${number_new_sources} -ge 1 ]
-  do
+# Loop through until we no longer add sources
+number_sources=${#SOURCE_LIST[@]}
+number_new_sources=${number_sources}
+while [ ${number_new_sources} -ge 1 ]
+do
     if [ "${VERBOSE}" == "TRUE" ] || [ "${LAYERS}" == "TRUE" ] ; then
       echo "Layer: ${LAYER} Number Sources: ${number_sources} New Sources: ${number_new_sources}"
     fi
@@ -217,25 +206,29 @@ do
     new_number_sources=${#SOURCE_LIST[@]}
     let number_new_sources=${new_number_sources}-${number_sources}
     number_sources=${new_number_sources}
-  done
+done
   
-  # Write it all out
-  printf "%s\n" "${SOURCE_LIST[@]}" | sort -o ${customer_dir}/${CUST_NEW_DIR}/source-packages-name.txt
+# Write it all out
+printf "%s\n" "${SOURCE_LIST[@]}" | sort -o ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt
   
-  # Check if there were changes
-  echo "  Checking source deps against last set"
-  if diff --brief ${customer_dir}/${CUST_NEW_DIR}/source-packages-name.txt ${customer_dir}/${CUST_LAST_DIR}/source-packages-name.txt > /dev/null 2>&1 ; then
+# Check if there were changes
+echo "  Checking source deps against last set"
+if diff --brief ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-source-package-names.txt > /dev/null 2>&1 ; then
     echo "      No change in source deps"
-    cp ${customer_dir}/${CUST_LAST_DIR}/binary-source-name.txt ${customer_dir}/${CUST_NEW_DIR}/binary-source-name.txt
-  else
+    cp ${DATA_DIR}/${LAST_DIR}/binary-source-name.txt ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt
+    echo "## SOURCE DEPENDENCIES ADDED" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+    echo "Total New Sources Added: 0" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md      
+    echo "## SOURCE DEPENDENCIES REMOVED" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+    echo "Total Sources Removed: 0" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+else
     things_changed="True"
     echo "      There were changes in source deps"
     if [ "${last_change_date}" == "NEVER" ] ; then
-      source_deps_added="$(cat ${customer_dir}/${CUST_NEW_DIR}/source-packages-name.txt)"
+      source_deps_added="$(cat ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt)"
       source_deps_removed=""
     else
-      source_deps_added="$(comm -23 ${customer_dir}/${CUST_NEW_DIR}/source-packages-name.txt ${customer_dir}/${CUST_LAST_DIR}/source-packages-name.txt 2>/dev/null)"
-      source_deps_removed="$(comm -13 ${customer_dir}/${CUST_NEW_DIR}/source-packages-name.txt ${customer_dir}/${CUST_LAST_DIR}/source-packages-name.txt 2>/dev/null)"
+      source_deps_added="$(comm -23 ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-source-package-names.txt 2>/dev/null)"
+      source_deps_removed="$(comm -13 ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-source-package-names.txt 2>/dev/null)"
     fi
     #echo "ADDED: ${source_deps_added}"
     #echo "REMOVED: ${source_deps_removed}"
@@ -246,29 +239,34 @@ do
       done
 
     # Work on added source deps
-    echo "## SOURCE DEPENDENCIES ADDED" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+    echo "## SOURCE DEPENDENCIES ADDED" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
     if ! [ "${source_deps_added}" == "" ] ; then
       echo "        Added packages"
       # Update binary-source-name.txt
-      dnf ${DNF_OPTIONS} repoquery --srpm --qf "%{name} %{sourcerpm}" --requires --resolve ${SOURCE_LIST[@]} 2>/dev/null | grep -v -e ^None$ -e "Subscription Management" | sort -o ${customer_dir}/${CUST_NEW_DIR}/binary-source-name.txt.tmp
-      convert_source_to_name ${customer_dir}/${CUST_NEW_DIR}/binary-source-name.txt.tmp ${customer_dir}/${CUST_NEW_DIR}/binary-source-name.txt
-      rm -f ${customer_dir}/${CUST_NEW_DIR}/binary-source-name.txt.tmp
+      dnf ${DNF_OPTIONS} repoquery --srpm --qf "%{name} %{sourcerpm}" --requires --resolve ${SOURCE_LIST[@]} 2>/dev/null | grep -v -e ^None$ -e "Subscription Management" | sort -o ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt.tmp
+      convert_source_to_name ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt.tmp ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt
+      rm -f ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt.tmp
       # Work with added sources
-      echo "${source_deps_added}" >> ${customer_dir}/${CUST_NEW_DIR}/changes.sources.added
-      echo "Total New Sources Added: $(cat ${customer_dir}/${CUST_NEW_DIR}/changes.sources.added | wc -l )" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-      echo "" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-      echo "PA = Package Added  R = Requires Added Package" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+      echo "${source_deps_added}" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-added.txt
+      echo "Total New Sources Added: $(cat ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-added.txt | wc -l )" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+      echo "" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+      echo "PA = Package Added  R = Requires Added Package  OLD = Not New" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
       for added_source in $(echo ${source_deps_added})
       do
-        echo "* ${added_source} PA" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-        for added_binary in $(grep " ${added_source}$" ${customer_dir}/${CUST_NEW_DIR}/binary-source-name.txt | awk '{print $1}')
+        echo "* ${added_source} PA" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+        for added_binary in $(grep " ${added_source}$" ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt | awk '{print $1}')
           do
             for wants_added in $(dnf ${DNF_OPTIONS} repoquery --qf "%{name}" --whatrequires ${added_binary} 2>/dev/null | grep -v -e ^None$ -e "Subscription Management")
               do
                 # Only work with packages we already know about.  Otherwise you end up with everything.
                 if [ -f  ${PACKAGE_DIR}/${wants_added} ] || [ -f  ${PACKAGE_ARCHIVE_DIR}/${wants_added} ] ; then
                   if ! [ "${added_binary}" == "${wants_added}" ] ; then
-                    echo "  * ${wants_added}  R" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+                    added_extra="R"
+                    if grep -q ^${wants_added}$ ${DATA_DIR}/${LAST_DIR}/buildroot-source-package-names.txt ; then
+                      added_extra="R OLD"
+                      echo ${wants_added} >> ${DATA_DIR}/${NEW_DIR}/packages.with.changed.dependencies.txt
+                    fi
+                    echo "  * ${wants_added}  ${added_extra}" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
                     archive_and_update ${wants_added}
                   fi
                 fi
@@ -276,58 +274,57 @@ do
           done
       done
     else
-      echo "Total New Sources Added: 0" >> ${customer_dir}/${CUST_NEW_DIR}/changes      
+      echo "Total New Sources Added: 0" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md      
     fi
     # Work on removed source deps
-    echo "## SOURCE DEPENDENCIES REMOVED" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+    echo "## SOURCE DEPENDENCIES REMOVED" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
     if ! [ "${source_deps_removed}" == "" ] ; then
       echo "        Removed packages"
       # Work with removed sources
-      echo "${source_deps_removed}" >> ${customer_dir}/${CUST_NEW_DIR}/changes.sources.removed
-      echo "Total Sources Removed: $(cat ${customer_dir}/${CUST_NEW_DIR}/changes.sources.removed | wc -l )" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-      echo "" >> ${customer_dir}/${CUST_NEW_DIR}/changes
-      echo "PR = Package Removed  N = No longer Needs removed package, or was also removed" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+      echo "${source_deps_removed}" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-removed.txt
+      echo "Total Sources Removed: $(cat ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-removed.txt | wc -l )" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+      echo "" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+      echo "PR = Package Removed  N = No longer Needs removed package, or was also removed" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
       for removed_source in $(echo ${source_deps_removed})
       do
-        echo "* ${removed_source} PR" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+        echo "* ${removed_source} PR" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
         for wants_removed in $(grep -l ^${removed_source}$ ${PACKAGE_ARCHIVE_DIR}/* ${PACKAGE_DIR}/* 2>/dev/null | awk -F "/" '{print $NF}' | sort -u)
         do
           if ! [ "${removed_source}" == "${wants_removed}" ] ; then
-            echo "  * ${wants_removed}  N" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+            echo "  * ${wants_removed}  N" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
             archive_and_update ${wants_removed}
           fi
         done
         rm -f ${PACKAGE_DIR}/${removed_source}
       done
     else
-      echo "Total Sources Removed: 0" >> ${customer_dir}/${CUST_NEW_DIR}/changes
+      echo "Total Sources Removed: 0" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
     fi
-  fi
+fi
 
-  # If there were changes, do that thing you do
-	if [ "${things_changed}" == "True" ] ; then
+# If there were changes, do that thing you do
+if [ "${things_changed}" == "True" ] ; then
 	  echo "  There were changes."
-		echo "    Archiving last results"
-		mkdir -p ${customer_dir}/archive/${last_change_date}
-		cp ${customer_dir}/${CUST_LAST_DIR}/* ${customer_dir}/archive/${last_change_date}/ 2>/dev/null
+		echo "    Archiving results"
+		mkdir -p ${DATA_DIR}/archive/${TIMESTAMP}
+		cp ${DATA_DIR}/${NEW_DIR}* ${DATA_DIR}/archive/${TIMESTAMP}/ 2>/dev/null
 		echo "    Setting new files to be the last ones"
-		rm -f ${customer_dir}/${CUST_LAST_DIR}/*
-		cp ${customer_dir}/${CUST_NEW_DIR}/* ${customer_dir}/${CUST_LAST_DIR}/
-		for action in ${customer_action_list}
+		rm -f ${DATA_DIR}/${LAST_DIR}/*
+		cp ${DATA_DIR}/${NEW_DIR}/* ${DATA_DIR}/${LAST_DIR}/
+		for action in ${action_list}
 		do
       case ${action} in
         email | EMAIL | Email )
           echo "    Mailling out results"
-          #mail -s "Dep Tracker: ${customer} results found" ${customer_email_list} < ${customer_dir}/${CUST_NEW_DIR}/changes
+          #mail -s "Dep Tracker: ${customer} results found" ${email_list} < ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
         ;;
         package | packages | Package )
           echo "    Mailling out results"
-          #mail -s "Dep Tracker: ${customer} results found" ${customer_email_list} < ${customer_dir}/${CUST_NEW_DIR}/changes
+          #mail -s "Dep Tracker: ${customer} results found" ${email_list} < ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
         ;;
         *)
           echo "    ${action} is not implemented"
         ;;
       esac
 		done
-	fi
-done
+fi
