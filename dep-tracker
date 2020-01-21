@@ -44,10 +44,17 @@ archive_and_update(){
     # the source has already been archived, nothing to do
     return 0
   else
-    if [ -f  ${PACKAGE_DIR}/${this_source} ] ; then
+    if [ -f  ${PACKAGE_DIR}/${this_source} ] && ! [ -f  ${PACKAGE_ARCHIVE_DIR}/${this_source} ] ; then
       mv ${PACKAGE_DIR}/${this_source} ${PACKAGE_ARCHIVE_DIR}/${this_source}
     fi
-    dnf ${DNF_OPTIONS} repoquery --qf="%{name}" list  $(dnf ${DNF_OPTIONS}  repoquery --srpm --qf="%{sourcerpm}" --requires --resolve ${this_source} 2>/dev/null | grep -v Subscription | sed "s/.rpm$//") 2>/dev/null | grep -v Subscription | sort -u -o ${PACKAGE_DIR}/${this_source}
+    rm -f ${PACKAGE_DIR}/${this_source}
+    if grep -q ^${this_source}$ ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ; then
+      dnf ${DNF_OPTIONS} repoquery --qf="%{name}" list  $(dnf ${DNF_OPTIONS}  repoquery --srpm --qf="%{sourcerpm}" --requires --resolve ${this_source} 2>/dev/null | grep -v Subscription | sed "s/.rpm$//") 2>/dev/null | grep -v Subscription >> ${PACKAGE_DIR}/${this_source}
+    fi
+    if grep -q ^${this_source}$ ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt ; then
+      dnf ${DNF_OPTIONS} repoquery --qf="%{name}" list  $(dnf ${DNF_OPTIONS}  repoquery --qf="%{sourcerpm}" --requires --resolve ${this_source} 2>/dev/null | grep -v Subscription | sed "s/.rpm$//") 2>/dev/null | grep -v Subscription >> ${PACKAGE_DIR}/${this_source}
+    fi
+    sort -u -o ${PACKAGE_DIR}/${this_source} ${PACKAGE_DIR}/${this_source}
   fi
   return 0
 }
@@ -184,10 +191,10 @@ if [ ${#ORIGINAL_LIST[@]} -le 0 ] ; then
 else
     if [ "${VERBOSE}" == "TRUE" ] ; then
       echo "Original Binaries: ${ORIGINAL_LIST[@]}"
-      get_source_name "${ORIGINAL_LIST[@]}"
+      get_source_name "${ORIGINAL_LIST[@]} $(dnf ${DNF_OPTIONS} repoquery --qf %{name} --requires --resolve ${ORIGINAL_LIST[@]} 2>/dev/null)"
       echo "Initial Source List: ${SOURCE_LIST[@]}"
     else
-      get_source_name "${ORIGINAL_LIST[@]}"
+      get_source_name "${ORIGINAL_LIST[@]} $(dnf ${DNF_OPTIONS} repoquery --qf %{name} --requires --resolve --recursive ${ORIGINAL_LIST[@]} 2>/dev/null)"
     fi
 fi
 
@@ -200,8 +207,9 @@ do
       echo "Layer: ${LAYER} Number Sources: ${number_sources} New Sources: ${number_new_sources}"
     fi
     let LAYER=${LAYER}+1
-  
+    
     get_source_name "$(dnf ${DNF_OPTIONS} repoquery --srpm --qf %{name} --requires --resolve ${SOURCE_LIST[@]} 2>/dev/null)"
+    get_source_name "$(dnf ${DNF_OPTIONS} repoquery --qf %{name} --requires --resolve --recursive $(dnf ${DNF_OPTIONS} repoquery --srpm --qf %{name} --requires --resolve ${SOURCE_LIST[@]} 2>/dev/null) 2>/dev/null )"
   
     new_number_sources=${#SOURCE_LIST[@]}
     let number_new_sources=${new_number_sources}-${number_sources}
@@ -223,21 +231,26 @@ if diff --brief ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ${DATA
 else
     things_changed="True"
     echo "      There were changes in source deps"
+    dnf ${DNF_OPTIONS} repoquery --qf %{name} --requires --resolve $(dnf ${DNF_OPTIONS} repoquery --srpm --qf %{name} --requires --resolve ${SOURCE_LIST[@]} 2>/dev/null) > ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt 2>/dev/null
     if [ "${last_change_date}" == "NEVER" ] ; then
       source_deps_added="$(cat ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt)"
+      binary_deps_added="$(cat ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt)"
       source_deps_removed=""
+      binary_deps_removed=""
     else
       source_deps_added="$(comm -23 ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-source-package-names.txt 2>/dev/null)"
+      binary_deps_added="$(comm -23 ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-binary-package-names.txt 2>/dev/null)"
       source_deps_removed="$(comm -13 ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-source-package-names.txt 2>/dev/null)"
+      binary_deps_removed="$(comm -13 ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-binary-package-names.txt 2>/dev/null)"
     fi
     #echo "ADDED: ${source_deps_added}"
     #echo "REMOVED: ${source_deps_removed}"
     # Update all added and removed source deps
-    for changed_source in $(echo ${source_deps_added} ${source_deps_removed})
+    for changed_source in $(echo ${source_deps_added} ${source_deps_removed} ${binary_deps_added} ${binary_deps_removed})
       do
         archive_and_update ${changed_source}
       done
-
+      
     # Work on added source deps
     echo "## SOURCE DEPENDENCIES ADDED" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
     if ! [ "${source_deps_added}" == "" ] ; then
@@ -307,7 +320,7 @@ if [ "${things_changed}" == "True" ] ; then
 	  echo "  There were changes."
 		echo "    Archiving results"
 		mkdir -p ${DATA_DIR}/archive/${TIMESTAMP}
-		cp ${DATA_DIR}/${NEW_DIR}* ${DATA_DIR}/archive/${TIMESTAMP}/ 2>/dev/null
+		cp ${DATA_DIR}/${NEW_DIR}/* ${DATA_DIR}/archive/${TIMESTAMP}/ 2>/dev/null
 		echo "    Setting new files to be the last ones"
 		rm -f ${DATA_DIR}/${LAST_DIR}/*
 		cp ${DATA_DIR}/${NEW_DIR}/* ${DATA_DIR}/${LAST_DIR}/
