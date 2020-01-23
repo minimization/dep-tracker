@@ -54,7 +54,9 @@ archive_and_update(){
     if grep -q ^${this_source}$ ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt ; then
       dnf ${DNF_OPTIONS} repoquery --qf="%{name}" list  $(dnf ${DNF_OPTIONS}  repoquery --qf="%{sourcerpm}" --requires --resolve ${this_source} 2>/dev/null | grep -v Subscription | sed "s/.rpm$//") 2>/dev/null | grep -v Subscription >> ${PACKAGE_DIR}/${this_source}
     fi
-    sort -u -o ${PACKAGE_DIR}/${this_source} ${PACKAGE_DIR}/${this_source}
+    if [ -f ${PACKAGE_DIR}/${this_source} ${PACKAGE_DIR}/${this_source} ] ; then
+      sort -u -o ${PACKAGE_DIR}/${this_source} ${PACKAGE_DIR}/${this_source}
+    fi
   fi
   return 0
 }
@@ -242,6 +244,10 @@ else
       binary_deps_added="$(comm -23 ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-binary-package-names.txt 2>/dev/null)"
       source_deps_removed="$(comm -13 ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-source-package-names.txt 2>/dev/null)"
       binary_deps_removed="$(comm -13 ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-binary-package-names.txt 2>/dev/null)"
+      echo "${source_deps_added}" > ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-added.txt
+      echo "${source_deps_removed}" > ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-removed.txt
+      echo "${binary_deps_added}" > ${DATA_DIR}/${NEW_DIR}/buildroot-changes-binaries-added.txt
+      echo "${binary_deps_removed}" > ${DATA_DIR}/${NEW_DIR}/buildroot-changes-binaries-removed.txt
     fi
     #echo "ADDED: ${source_deps_added}"
     #echo "REMOVED: ${source_deps_removed}"
@@ -260,7 +266,6 @@ else
       convert_source_to_name ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt.tmp ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt
       rm -f ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt.tmp
       # Work with added sources
-      echo "${source_deps_added}" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-added.txt
       echo "Total New Sources Added: $(cat ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-added.txt | wc -l )" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
       echo "" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
       echo "PA = Package Added  R = Requires Added Package  OLD = Not New" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
@@ -294,7 +299,6 @@ else
     if ! [ "${source_deps_removed}" == "" ] ; then
       echo "        Removed packages"
       # Work with removed sources
-      echo "${source_deps_removed}" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-removed.txt
       echo "Total Sources Removed: $(cat ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-removed.txt | wc -l )" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
       echo "" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
       echo "PR = Package Removed  N = No longer Needs removed package, or was also removed" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
