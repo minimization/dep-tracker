@@ -1,0 +1,113 @@
+#!/bin/bash
+# Track dependendencies of a list of packages
+#  and do something (usuall email) when the dependencies change
+#
+
+#####
+# Variables
+#####
+TIMESTAMP=$(date +%Y-%m-%d-%H:%M)
+ARCH_LIST="aarch64 ppc64le s390x x86_64"
+# DIRS
+WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+#WORK_DIR="~/.dep-tracker"
+CONF_DIR="${WORK_DIR}/conf"
+DATA_DIR_BASE="${WORK_DIR}/data"
+REPO_DIR="${WORK_DIR}/repos"
+PACKAGE_DIR="${WORK_DIR}/packages"
+# FILES/VARIABLES
+PACKAGE_LIST_HEAD="Packages"
+NEW_DIR="new"
+LAST_DIR="last"
+DNF_OPTIONS=" -c ${REPO_DIR}/rawhide.repo --disablerepo=* --enablerepo=dt-rawhide --enablerepo=dt-rawhide-source "
+# BINARY VARIABLES
+VERBOSE="FALSE"
+LAYERS="TRUE"
+# LIST VARIABLES
+ORIGINAL_LIST=()
+SOURCE_LIST=()
+BINARY_LIST=()
+LAYER=1
+
+# Given a list of binary packages, get the source name, and add it to the source_list
+get_source_name(){
+  if [ "${VERBOSE}" == "TRUE" ] ; then
+    echo "   Gathering source names from binary names"
+  fi
+  this_source_name="$(dnf ${DNF_OPTIONS} repoquery --qf %{source_name} $@ 2>/dev/null| grep -v -i -e ^None$ -e "Subscription Management" )"
+  for this_source in ${this_source_name[@]}
+   do
+    if [[ ! " ${SOURCE_LIST[@]} " =~ " ${this_source} " ]]; then
+      if [ "${VERBOSE}" == "TRUE" ] ; then
+        echo "    ADDING SOURCE: ${this_source}"
+      fi
+      SOURCE_LIST+=("${this_source}")
+    fi
+   done
+}
+
+#####
+# Work through everything one arch at a time
+#####
+for this_arch in ${ARCH_LIST}
+do
+
+  #####
+  # Setup
+  #####
+  dnf --quiet --forcearch=${this_arch} clean all
+  ORIGINAL_LIST=()
+  SOURCE_LIST=()
+  BINARY_LIST=()
+  LAYER=1
+  PACKAGE_LIST="${PACKAGE_LIST_HEAD}.${this_arch}"
+  DATA_DIR="${DATA_DIR_BASE}/${this_arch}"
+  if [ -d ${DATA_DIR}/${NEW_DIR} ] ; then
+    rm -f ${DATA_DIR}/${NEW_DIR}/*
+  else
+    mkdir -p ${DATA_DIR}/${NEW_DIR}
+  fi
+  echo "${TIMESTAMP}" > ${DATA_DIR}/${NEW_DIR}/buildroot-date-check.txt
+  cp ${CONF_DIR}/${PACKAGE_LIST} ${DATA_DIR}/${NEW_DIR}/
+  # Conf Parsing
+  ORIGINAL_LIST="$(cat ${CONF_DIR}/${PACKAGE_LIST})"
+  
+  #####
+  # Work
+  #####
+  echo "  Creating BuildRoot for ${this_arch} ..."
+  
+  ## Find the sources for the original packages
+  if [ ${#ORIGINAL_LIST[@]} -le 0 ] ; then
+      echo "NO PACKAGES LISTED"
+      echo
+      exit 5
+  else
+    get_source_name "${ORIGINAL_LIST[@]} $(dnf --forcearch=${this_arch} ${DNF_OPTIONS} repoquery --qf %{name} --requires --resolve --recursive ${ORIGINAL_LIST[@]} 2>/dev/null)"
+  fi
+  
+  # Loop through until we no longer add sources
+  number_sources=${#SOURCE_LIST[@]}
+  number_new_sources=${number_sources}
+  while [ ${number_new_sources} -ge 1 ]
+  do
+    if [ "${VERBOSE}" == "TRUE" ] || [ "${LAYERS}" == "TRUE" ] ; then
+      echo "Layer: ${LAYER} Number Sources: ${number_sources} New Sources: ${number_new_sources}"
+    fi
+    let LAYER=${LAYER}+1
+    BINARY_LIST="$(dnf --forcearch=${this_arch} ${DNF_OPTIONS} repoquery --srpm --qf %{name} --requires --resolve ${SOURCE_LIST[@]} 2>/dev/null)"
+    get_source_name "${BINARY_LIST[@]}"
+    get_source_name "$(dnf --forcearch=${this_arch} ${DNF_OPTIONS} repoquery --qf %{name} --requires --resolve --recursive ${BINARY_LIST[@]} 2>/dev/null )"
+  
+    new_number_sources=${#SOURCE_LIST[@]}
+    let number_new_sources=${new_number_sources}-${number_sources}
+    number_sources=${new_number_sources}
+  done
+
+  # Write it all out
+  printf "%s\n" "${SOURCE_LIST[@]}" | sort -o ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt
+  printf "%s\n" "${BINARY_LIST[@]}" | sort -o ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt
+
+# finish with this arch
+done
+exit 0
