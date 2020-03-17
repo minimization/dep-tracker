@@ -54,33 +54,11 @@ archive_and_update(){
     if grep -q ^${this_source}$ ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt ; then
       dnf ${DNF_OPTIONS} repoquery --qf="%{name}" list  $(dnf ${DNF_OPTIONS}  repoquery --qf="%{sourcerpm}" --requires --resolve ${this_source} 2>/dev/null | grep -v Subscription | sed "s/.rpm$//") 2>/dev/null | grep -v Subscription >> ${PACKAGE_DIR}/${this_source}
     fi
-    if [ -f ${PACKAGE_DIR}/${this_source} ${PACKAGE_DIR}/${this_source} ] ; then
+    if [ -f ${PACKAGE_DIR}/${this_source} ] ; then
       sort -u -o ${PACKAGE_DIR}/${this_source} ${PACKAGE_DIR}/${this_source}
     fi
   fi
   return 0
-}
-
-# Given a list of binary packages, get the source name, and add it to the source_list
-get_source_name(){
-  if [ "${VERBOSE}" == "TRUE" ] ; then
-        echo "   GATHERING SOURCE NAMES FROM LIST OF BINARIES"
-  fi
-  #echo "  this_source_name= (dnf ${DNF_OPTIONS} repoquery --qf %{name} (dnf ${DNF_OPTIONS} repoquery --qf %{sourcerpm} $@ 2>/dev/null| sed 's/.rpm$//') 2>/dev/null)"
-  this_source_name="$(dnf ${DNF_OPTIONS} repoquery --qf %{name} $(dnf ${DNF_OPTIONS} repoquery --qf %{sourcerpm} $@ 2>/dev/null| grep -v -e ^None$ -e "Subscription Management" | sed 's/.rpm$//') 2>/dev/null | grep -v -e ^None$ -e "Subscription Management")"
-  for this_source in ${this_source_name[@]}
-   do
-    #echo "    SOURCE: ${this_source}"
-    if [[ ! " ${SOURCE_LIST[@]} " =~ " ${this_source} " ]]; then
-      if [ "${VERBOSE}" == "TRUE" ] ; then
-        echo "    ADDING SOURCE: ${this_source}"
-      fi
-      SOURCE_LIST+=("${this_source}")
-      #if [ "${LAYERS}" == "TRUE" ] ; then
-      #  echo ${this_source} >> ${OUTPUT_FILE}.layer${LAYER}
-      #fi
-    fi
-   done
 }
 
 convert_source_to_name(){
@@ -125,26 +103,23 @@ convert_source_to_name(){
 }
 
 #####
-# Setup
+# Check if we can run, then Setup
 #####
-#dnf --quiet clean all
-ORIGINAL_LIST=()
-SOURCE_LIST=()
-BINARY_LIST=()
-LAYER=1
-things_changed="False"
-if ! [ -d ${DATA_DIR}/archive ] ; then
-  mkdir -p ${DATA_DIR}/{archive,logs,${NEW_DIR},${LAST_DIR}}
-  mkdir -p ${PACKAGE_DIR}/convert
-  last_change_date="NEVER"
-else
-  last_change_date="$(cat ${DATA_DIR}/${LAST_DIR}/buildroot-date-check.txt)"
+# Has a new buildroot been created
+if ! diff -N --brief ${DATA_DIR}/${LAST_DIR}/buildroot-date-check.txt ${DATA_DIR}/${NEW_DIR}/buildroot-date-check.txt ; then
+  echo "A new buildroot has not been created since last run."
+  echo "Exiting"
+  exit 1
 fi
-rm -f ${DATA_DIR}/${NEW_DIR}/*
-echo "${TIMESTAMP}" > ${DATA_DIR}/${NEW_DIR}/buildroot-date-check.txt
-cp ${CONF_DIR}/${PACKAGE_LIST} ${DATA_DIR}/${NEW_DIR}/
+things_changed="False"
+TIMESTAMP=$(cat ${DATA_DIR}/${NEW_DIR}/buildroot-date-check.txt)
+PACKAGE_ARCHIVE_DIR=${PACKAGE_DIR}/archive/${TIMESTAMP}
+SOURCE_LIST="$(cat ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt)"
+# Clean up files incase we did a partial run
+rm -f  ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt
+rm -f  ${DATA_DIR}/${NEW_DIR}/buildroot-changes*
+rm -f  ${DATA_DIR}/${NEW_DIR}/packages.with.changed.dependencies.txt
 # Conf Parsing
-ORIGINAL_LIST="$(cat ${CONF_DIR}/${PACKAGE_LIST})"
 email_list="$(grep ^Email: ${CONF_DIR}/${MAIN_CONF} | cut -d' ' -f2-)"
 action_list="$(grep ^Action: ${CONF_DIR}/${MAIN_CONF} | cut -d' ' -f2-)"
 
@@ -153,12 +128,21 @@ action_list="$(grep ^Action: ${CONF_DIR}/${MAIN_CONF} | cut -d' ' -f2-)"
 #####
 # Do the checks
 echo "  Checking ..."
+
+## Check that we have the source list
+if [ ${#SOURCE_LIST[@]} -le 0 ] ; then
+    echo "NO SOURCE PACKAGES LISTED"
+    echo "exiting."
+    exit 5
+fi
+
+## Setup changes file
 echo "# Buildroot Source Changes" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
 echo "Checked on ${TIMESTAMP}" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
 echo "" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
 echo "Last time there was a change was [${last_change_date}](https://github.com/minimization/square1-results/blob/master/docs/archives/${last_change_date}/data/buildroot-changes.md)" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
 
-# Default: Always check if the package list has changed
+## Check if the package list has changed
 if diff --brief ${DATA_DIR}/${NEW_DIR}/${PACKAGE_LIST} ${DATA_DIR}/${LAST_DIR}/${PACKAGE_LIST} > /dev/null 2>&1 ; then
 	  echo "    No change in package list"
 else
@@ -184,44 +168,8 @@ else
 	  echo  >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
 fi
 
-## Find the sources for the original packages
-if [ ${#ORIGINAL_LIST[@]} -le 0 ] ; then
-    echo "NO PACKAGES LISTED"
-    echo
-    usage
-    exit 5
-else
-    if [ "${VERBOSE}" == "TRUE" ] ; then
-      echo "Original Binaries: ${ORIGINAL_LIST[@]}"
-      get_source_name "${ORIGINAL_LIST[@]} $(dnf ${DNF_OPTIONS} repoquery --qf %{name} --requires --resolve ${ORIGINAL_LIST[@]} 2>/dev/null)"
-      echo "Initial Source List: ${SOURCE_LIST[@]}"
-    else
-      get_source_name "${ORIGINAL_LIST[@]} $(dnf ${DNF_OPTIONS} repoquery --qf %{name} --requires --resolve --recursive ${ORIGINAL_LIST[@]} 2>/dev/null)"
-    fi
-fi
 
-# Loop through until we no longer add sources
-number_sources=${#SOURCE_LIST[@]}
-number_new_sources=${number_sources}
-while [ ${number_new_sources} -ge 1 ]
-do
-    if [ "${VERBOSE}" == "TRUE" ] || [ "${LAYERS}" == "TRUE" ] ; then
-      echo "Layer: ${LAYER} Number Sources: ${number_sources} New Sources: ${number_new_sources}"
-    fi
-    let LAYER=${LAYER}+1
-    
-    get_source_name "$(dnf ${DNF_OPTIONS} repoquery --srpm --qf %{name} --requires --resolve ${SOURCE_LIST[@]} 2>/dev/null)"
-    get_source_name "$(dnf ${DNF_OPTIONS} repoquery --qf %{name} --requires --resolve --recursive $(dnf ${DNF_OPTIONS} repoquery --srpm --qf %{name} --requires --resolve ${SOURCE_LIST[@]} 2>/dev/null) 2>/dev/null )"
-  
-    new_number_sources=${#SOURCE_LIST[@]}
-    let number_new_sources=${new_number_sources}-${number_sources}
-    number_sources=${new_number_sources}
-done
-  
-# Write it all out
-printf "%s\n" "${SOURCE_LIST[@]}" | sort -o ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt
-  
-# Check if there were changes
+## Check if there were changes
 echo "  Checking source deps against last set"
 if diff --brief ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-source-package-names.txt > /dev/null 2>&1 ; then
     echo "      No change in source deps"
@@ -233,7 +181,6 @@ if diff --brief ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ${DATA
 else
     things_changed="True"
     echo "      There were changes in source deps"
-    dnf ${DNF_OPTIONS} repoquery --qf %{name} --requires --resolve $(dnf ${DNF_OPTIONS} repoquery --srpm --qf %{name} --requires --resolve ${SOURCE_LIST[@]} 2>/dev/null) > ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt 2>/dev/null
     if [ "${last_change_date}" == "NEVER" ] ; then
       source_deps_added="$(cat ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt)"
       binary_deps_added="$(cat ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt)"
