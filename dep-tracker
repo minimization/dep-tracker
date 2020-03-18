@@ -7,30 +7,24 @@
 # Variables
 #####
 TIMESTAMP=$(date +%Y-%m-%d-%H:%M)
+ARCH_LIST="aarch64 ppc64le s390x x86_64"
+# DIRS
 WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 #WORK_DIR="~/.dep-tracker"
 CONF_DIR="${WORK_DIR}/conf"
-DATA_DIR="${WORK_DIR}/data"
 REPO_DIR="${WORK_DIR}/repos"
-PACKAGE_DIR="${WORK_DIR}/packages"
+DATA_DIR_BASE="${WORK_DIR}/data"
+PACKAGE_DIR_BASE="${WORK_DIR}/packages"
+PACKAGE_ARCHIVE_DIR_BASE=${PACKAGE_DIR_BASE}/archive/${TIMESTAMP}
+# FILES/VARIABLES
+PACKAGE_LIST_HEAD="Packages"
 PACKAGE_CONVERT="${PACKAGE_DIR}/convert/convert.package.nvr.name"
-PACKAGE_ARCHIVE_DIR=${PACKAGE_DIR}/archive/${TIMESTAMP}
-#LOG_DIR="${WORK_DIR}/logs"
-#LOG_FILE="${LOG_DIR}/dt.logs"
 MAIN_CONF="dt.conf"
-PACKAGE_LIST="buildroot-initial-binary-package-list.txt"
 NEW_DIR="new"
 LAST_DIR="last"
 DNF_OPTIONS=" -c ${REPO_DIR}/rawhide.repo --disablerepo=* --enablerepo=dt-rawhide --enablerepo=dt-rawhide-source "
-DNF_SOURCE_ONLY_OPTIONS=" -c ${REPO_DIR}/rawhide.repo --disablerepo=* --enablerepo=dt-rawhide-source "
 # BINARY VARIABLES
 VERBOSE="FALSE"
-LAYERS="TRUE"
-# LIST VARIABLES
-ORIGINAL_LIST=()
-SOURCE_LIST=()
-BINARY_LIST=()
-LAYER=1
 
 # Given a list of source name, archive then update the package info
 archive_and_update(){
@@ -39,7 +33,7 @@ archive_and_update(){
     echo "archive_and_update needs a source, nothing was provided"
     return 1
   fi
-  mkdir -p ${PACKAGE_ARCHIVE_DIR}
+  mkdir -p ${PACKAGE_ARCHIVE_DIR}/
   if [ -f  ${PACKAGE_DIR}/${this_source} ] && [ -f  ${PACKAGE_ARCHIVE_DIR}/${this_source} ] ; then
     # the source has already been archived, nothing to do
     return 0
@@ -49,10 +43,10 @@ archive_and_update(){
     fi
     rm -f ${PACKAGE_DIR}/${this_source}
     if grep -q ^${this_source}$ ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ; then
-      dnf ${DNF_OPTIONS} repoquery --qf="%{name}" list  $(dnf ${DNF_OPTIONS}  repoquery --srpm --qf="%{sourcerpm}" --requires --resolve ${this_source} 2>/dev/null | grep -v Subscription | sed "s/.rpm$//") 2>/dev/null | grep -v Subscription >> ${PACKAGE_DIR}/${this_source}
+      dnf ${DNF_OPTIONS} repoquery --srpm --qf="%{source_name}" --requires --resolve ${this_source}  2>/dev/null | grep -v Subscription >> ${PACKAGE_DIR}/${this_source}
     fi
     if grep -q ^${this_source}$ ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt ; then
-      dnf ${DNF_OPTIONS} repoquery --qf="%{name}" list  $(dnf ${DNF_OPTIONS}  repoquery --qf="%{sourcerpm}" --requires --resolve ${this_source} 2>/dev/null | grep -v Subscription | sed "s/.rpm$//") 2>/dev/null | grep -v Subscription >> ${PACKAGE_DIR}/${this_source}
+      dnf ${DNF_OPTIONS} repoquery --qf="%{source_name}" --requires --resolve ${this_source} 2>/dev/null | grep -v Subscription >> ${PACKAGE_DIR}/${this_source}
     fi
     if [ -f ${PACKAGE_DIR}/${this_source} ] ; then
       sort -u -o ${PACKAGE_DIR}/${this_source} ${PACKAGE_DIR}/${this_source}
@@ -103,192 +97,212 @@ convert_source_to_name(){
 }
 
 #####
-# Check if we can run, then Setup
+# Work through everything one arch at a time
 #####
-# Has a new buildroot been created
-if ! diff -N --brief ${DATA_DIR}/${LAST_DIR}/buildroot-date-check.txt ${DATA_DIR}/${NEW_DIR}/buildroot-date-check.txt ; then
-  echo "A new buildroot has not been created since last run."
-  echo "Exiting"
-  exit 1
-fi
-things_changed="False"
-TIMESTAMP=$(cat ${DATA_DIR}/${NEW_DIR}/buildroot-date-check.txt)
-PACKAGE_ARCHIVE_DIR=${PACKAGE_DIR}/archive/${TIMESTAMP}
-SOURCE_LIST="$(cat ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt)"
-# Clean up files incase we did a partial run
-rm -f  ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt
-rm -f  ${DATA_DIR}/${NEW_DIR}/buildroot-changes*
-rm -f  ${DATA_DIR}/${NEW_DIR}/packages.with.changed.dependencies.txt
-# Conf Parsing
-email_list="$(grep ^Email: ${CONF_DIR}/${MAIN_CONF} | cut -d' ' -f2-)"
-action_list="$(grep ^Action: ${CONF_DIR}/${MAIN_CONF} | cut -d' ' -f2-)"
+for this_arch in ${ARCH_LIST}
+do
+  export DATA_DIR="${DATA_DIR_BASE}/${this_arch}"
+  export PACKAGE_DIR="${PACKAGE_DIR_BASE}/${this_arch}"
+  TIMESTAMP=$(cat ${DATA_DIR}/${NEW_DIR}/buildroot-date-check.txt)
+  export PACKAGE_ARCHIVE_DIR=${PACKAGE_DIR}/archive/${TIMESTAMP}
+  PACKAGE_LIST="${PACKAGE_LIST_HEAD}.${this_arch}"
+  if ! [ -d ${DATA_DIR}/archive ] ; then
+    mkdir -p ${DATA_DIR}/{archive,${NEW_DIR},${LAST_DIR}}
+    mkdir -p ${PACKAGE_DIR}/convert
+    last_change_date="NEVER"
+  else
+    last_change_date="$(cat ${DATA_DIR}/${LAST_DIR}/buildroot-date-check.txt)"
+  fi
 
-#####
-# Work
-#####
-# Do the checks
-echo "  Checking ..."
+  #####
+  # Check if we can run, then Setup
+  #####
+  # Has a new buildroot been created
+  if diff --brief ${DATA_DIR}/${LAST_DIR}/buildroot-date-check.txt ${DATA_DIR}/${NEW_DIR}/buildroot-date-check.txt > /dev/null 2>&1 ; then
+    echo "A new buildroot has not been created since last run."
+    echo "Exiting"
+    exit 1
+  fi
+  echo "${this_arch}"
+  things_changed="False"
+  SOURCE_LIST="$(cat ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt)"
+  # Clean up files incase we did a partial run
+  rm -f  ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt
+  rm -f  ${DATA_DIR}/${NEW_DIR}/buildroot-changes*
+  rm -f  ${DATA_DIR}/${NEW_DIR}/packages.with.changed.dependencies.txt
+  # Conf Parsing
+  email_list="$(grep ^Email: ${CONF_DIR}/${MAIN_CONF} | cut -d' ' -f2-)"
+  action_list="$(grep ^Action: ${CONF_DIR}/${MAIN_CONF} | cut -d' ' -f2-)"
+  
+  #####
+  # Work
+  #####
+  # Do the checks
+  echo "  Checking ..."
+  
+  ## Check that we have the source list
+  if [ ${#SOURCE_LIST[@]} -le 0 ] ; then
+      echo "NO SOURCE PACKAGES LISTED"
+      echo "exiting."
+      exit 5
+  fi
+  
+  ## Setup changes file
+  echo "# Buildroot Source Changes" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+  echo "Checked on ${TIMESTAMP}" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+  echo "" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+  echo "Last time there was a change was [${last_change_date}](https://github.com/minimization/square1-results/blob/master/docs/archives/${last_change_date}/data/buildroot-changes.md)" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
 
-## Check that we have the source list
-if [ ${#SOURCE_LIST[@]} -le 0 ] ; then
-    echo "NO SOURCE PACKAGES LISTED"
-    echo "exiting."
-    exit 5
-fi
-
-## Setup changes file
-echo "# Buildroot Source Changes" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-echo "Checked on ${TIMESTAMP}" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-echo "" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-echo "Last time there was a change was [${last_change_date}](https://github.com/minimization/square1-results/blob/master/docs/archives/${last_change_date}/data/buildroot-changes.md)" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-
-## Check if the package list has changed
-if diff --brief ${DATA_DIR}/${NEW_DIR}/${PACKAGE_LIST} ${DATA_DIR}/${LAST_DIR}/${PACKAGE_LIST} > /dev/null 2>&1 ; then
-	  echo "    No change in package list"
-else
-	  things_changed="True"
-	  echo "    There were changes in the package list"
-    if [ "${last_change_date}" == "NEVER" ] ; then
-      packages_added="$(cat ${CONF_DIR}/${PACKAGE_LIST})"
-      packages_removed=""
-    else
-	    packages_added="$(comm -23 ${DATA_DIR}/${NEW_DIR}/${PACKAGE_LIST} ${DATA_DIR}/${LAST_DIR}/${PACKAGE_LIST} 2>/dev/null)"
-	    packages_removed="$(comm -13 ${DATA_DIR}/${NEW_DIR}/${PACKAGE_LIST} ${DATA_DIR}/${LAST_DIR}/${PACKAGE_LIST} 2>/dev/null)"
-	  fi
-	  #echo "ADDED: ${packages_added}"
-	  #echo "REMOVED: ${packages_removed}"
-    if ! [ "${packages_added}" == "" ] ; then
-	    echo "## BINARY PACKAGES ADDED" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-	    echo "* ${packages_added}" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-    fi
-    if ! [ "${packages_removed}" == "" ] ; then
-	    echo "## BINARY PACKAGES REMOVED" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-	    echo "* ${packages_removed}" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-  	fi
-	  echo  >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-fi
-
-
-## Check if there were changes
-echo "  Checking source deps against last set"
-if diff --brief ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-source-package-names.txt > /dev/null 2>&1 ; then
-    echo "      No change in source deps"
-    cp ${DATA_DIR}/${LAST_DIR}/binary-source-name.txt ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt
-    echo "## SOURCE DEPENDENCIES ADDED" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-    echo "Total New Sources Added: 0" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md      
-    echo "## SOURCE DEPENDENCIES REMOVED" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-    echo "Total Sources Removed: 0" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-else
-    things_changed="True"
-    echo "      There were changes in source deps"
-    if [ "${last_change_date}" == "NEVER" ] ; then
-      source_deps_added="$(cat ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt)"
-      binary_deps_added="$(cat ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt)"
-      source_deps_removed=""
-      binary_deps_removed=""
-    else
-      source_deps_added="$(comm -23 ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-source-package-names.txt 2>/dev/null)"
-      binary_deps_added="$(comm -23 ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-binary-package-names.txt 2>/dev/null)"
-      source_deps_removed="$(comm -13 ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-source-package-names.txt 2>/dev/null)"
-      binary_deps_removed="$(comm -13 ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-binary-package-names.txt 2>/dev/null)"
-      echo "${source_deps_added}" > ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-added.txt
-      echo "${source_deps_removed}" > ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-removed.txt
-      echo "${binary_deps_added}" > ${DATA_DIR}/${NEW_DIR}/buildroot-changes-binaries-added.txt
-      echo "${binary_deps_removed}" > ${DATA_DIR}/${NEW_DIR}/buildroot-changes-binaries-removed.txt
-    fi
-    #echo "ADDED: ${source_deps_added}"
-    #echo "REMOVED: ${source_deps_removed}"
-    # Update all added and removed source deps
-    for changed_source in $(echo ${source_deps_added} ${source_deps_removed} ${binary_deps_added} ${binary_deps_removed})
-      do
-        archive_and_update ${changed_source}
-      done
-      
-    # Work on added source deps
-    echo "## SOURCE DEPENDENCIES ADDED" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-    if ! [ "${source_deps_added}" == "" ] ; then
-      echo "        Added packages"
-      # Update binary-source-name.txt
-      dnf ${DNF_OPTIONS} repoquery --srpm --qf "%{name} %{sourcerpm}" --requires --resolve ${SOURCE_LIST[@]} 2>/dev/null | grep -v -e ^None$ -e "Subscription Management" | sort -o ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt.tmp
-      convert_source_to_name ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt.tmp ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt
-      rm -f ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt.tmp
-      # Work with added sources
-      echo "Total New Sources Added: $(cat ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-added.txt | wc -l )" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-      echo "" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-      echo "PA = Package Added  R = Requires Added Package  OLD = Not New" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-      for added_source in $(echo ${source_deps_added})
-      do
-        echo "* ${added_source} PA" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-        for added_binary in $(grep " ${added_source}$" ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt | awk '{print $1}')
-          do
-            for wants_added in $(dnf ${DNF_OPTIONS} repoquery --qf "%{name}" --whatrequires ${added_binary} 2>/dev/null | grep -v -e ^None$ -e "Subscription Management")
-              do
-                # Only work with packages we already know about.  Otherwise you end up with everything.
-                if [ -f  ${PACKAGE_DIR}/${wants_added} ] || [ -f  ${PACKAGE_ARCHIVE_DIR}/${wants_added} ] ; then
-                  if ! [ "${added_binary}" == "${wants_added}" ] ; then
-                    added_extra="R"
-                    if grep -q ^${wants_added}$ ${DATA_DIR}/${LAST_DIR}/buildroot-source-package-names.txt ; then
-                      added_extra="R OLD"
-                      echo ${wants_added} >> ${DATA_DIR}/${NEW_DIR}/packages.with.changed.dependencies.txt
-                    fi
-                    echo "  * ${wants_added}  ${added_extra}" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-                    archive_and_update ${wants_added}
-                  fi
-                fi
-              done
-          done
-      done
-    else
+  ## Check if the package list has changed
+  if diff --brief ${DATA_DIR}/${NEW_DIR}/${PACKAGE_LIST} ${DATA_DIR}/${LAST_DIR}/${PACKAGE_LIST} > /dev/null 2>&1 ; then
+  	  echo "    No change in package list"
+  else
+  	  things_changed="True"
+  	  echo "    There were changes in the package list"
+      if [ "${last_change_date}" == "NEVER" ] ; then
+        packages_added="$(cat ${DATA_DIR}/${NEW_DIR}/${PACKAGE_LIST})"
+        packages_removed=""
+      else
+  	    packages_added="$(comm -23 ${DATA_DIR}/${NEW_DIR}/${PACKAGE_LIST} ${DATA_DIR}/${LAST_DIR}/${PACKAGE_LIST} 2>/dev/null)"
+  	    packages_removed="$(comm -13 ${DATA_DIR}/${NEW_DIR}/${PACKAGE_LIST} ${DATA_DIR}/${LAST_DIR}/${PACKAGE_LIST} 2>/dev/null)"
+  	  fi
+  	  #echo "ADDED: ${packages_added}"
+  	  #echo "REMOVED: ${packages_removed}"
+      if ! [ "${packages_added}" == "" ] ; then
+  	    echo "## BINARY PACKAGES ADDED" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+  	    echo "* ${packages_added}" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+      fi
+      if ! [ "${packages_removed}" == "" ] ; then
+  	    echo "## BINARY PACKAGES REMOVED" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+  	    echo "* ${packages_removed}" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+    	fi
+  	  echo  >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+  fi
+  
+  
+  ## Check if there were changes
+  echo "  Checking source deps against last set"
+  if diff --brief ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-source-package-names.txt > /dev/null 2>&1 ; then
+      echo "      No change in source deps"
+      cp ${DATA_DIR}/${LAST_DIR}/binary-source-name.txt ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt
+      echo "## SOURCE DEPENDENCIES ADDED" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
       echo "Total New Sources Added: 0" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md      
-    fi
-    # Work on removed source deps
-    echo "## SOURCE DEPENDENCIES REMOVED" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-    if ! [ "${source_deps_removed}" == "" ] ; then
-      echo "        Removed packages"
-      # Work with removed sources
-      echo "Total Sources Removed: $(cat ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-removed.txt | wc -l )" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-      echo "" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-      echo "PR = Package Removed  N = No longer Needs removed package, or was also removed" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-      for removed_source in $(echo ${source_deps_removed})
-      do
-        echo "* ${removed_source} PR" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-        for wants_removed in $(grep -l ^${removed_source}$ ${PACKAGE_ARCHIVE_DIR}/* ${PACKAGE_DIR}/* 2>/dev/null | awk -F "/" '{print $NF}' | sort -u)
-        do
-          if ! [ "${removed_source}" == "${wants_removed}" ] ; then
-            echo "  * ${wants_removed}  N" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-            archive_and_update ${wants_removed}
-          fi
-        done
-        rm -f ${PACKAGE_DIR}/${removed_source}
-      done
-    else
+      echo "## SOURCE DEPENDENCIES REMOVED" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
       echo "Total Sources Removed: 0" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-    fi
-fi
-
-# If there were changes, do that thing you do
-if [ "${things_changed}" == "True" ] ; then
-	  echo "  There were changes."
-		echo "    Archiving results"
-		mkdir -p ${DATA_DIR}/archive/${TIMESTAMP}
-		cp ${DATA_DIR}/${NEW_DIR}/* ${DATA_DIR}/archive/${TIMESTAMP}/ 2>/dev/null
-		echo "    Setting new files to be the last ones"
-		rm -f ${DATA_DIR}/${LAST_DIR}/*
-		cp ${DATA_DIR}/${NEW_DIR}/* ${DATA_DIR}/${LAST_DIR}/
-		for action in ${action_list}
-		do
-      case ${action} in
-        email | EMAIL | Email )
-          echo "    Mailling out results"
-          #mail -s "Dep Tracker: ${customer} results found" ${email_list} < ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-        ;;
-        package | packages | Package )
-          echo "    Mailling out results"
-          #mail -s "Dep Tracker: ${customer} results found" ${email_list} < ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
-        ;;
-        *)
-          echo "    ${action} is not implemented"
-        ;;
-      esac
-		done
-fi
+  else
+      things_changed="True"
+      echo "      There were changes in source deps"
+      if [ "${last_change_date}" == "NEVER" ] ; then
+        source_deps_added="$(cat ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt)"
+        binary_deps_added="$(cat ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt)"
+        source_deps_removed=""
+        binary_deps_removed=""
+      else
+        source_deps_added="$(comm -23 ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-source-package-names.txt 2>/dev/null)"
+        binary_deps_added="$(comm -23 ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-binary-package-names.txt 2>/dev/null)"
+        source_deps_removed="$(comm -13 ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-source-package-names.txt 2>/dev/null)"
+        binary_deps_removed="$(comm -13 ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-binary-package-names.txt 2>/dev/null)"
+        echo "${source_deps_added}" > ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-added.txt
+        echo "${source_deps_removed}" > ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-removed.txt
+        echo "${binary_deps_added}" > ${DATA_DIR}/${NEW_DIR}/buildroot-changes-binaries-added.txt
+        echo "${binary_deps_removed}" > ${DATA_DIR}/${NEW_DIR}/buildroot-changes-binaries-removed.txt
+      fi
+      #echo "ADDED: ${source_deps_added}"
+      #echo "REMOVED: ${source_deps_removed}"
+      # Update all added and removed source deps
+      for changed_source in $(echo ${source_deps_added} ${source_deps_removed} ${binary_deps_added} ${binary_deps_removed})
+        do
+          archive_and_update ${changed_source}
+        done
+        
+      # Work on added source deps
+      echo "## SOURCE DEPENDENCIES ADDED" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+      if ! [ "${source_deps_added}" == "" ] ; then
+        echo "        Added packages"
+        # Update binary-source-name.txt
+        dnf ${DNF_OPTIONS} repoquery --srpm --qf "%{name} %{sourcerpm}" --requires --resolve ${SOURCE_LIST[@]} 2>/dev/null | grep -v -e ^None$ -e "Subscription Management" | sort -o ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt.tmp
+        convert_source_to_name ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt.tmp ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt
+        rm -f ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt.tmp
+        # Work with added sources
+        echo "Total New Sources Added: $(cat ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-added.txt | wc -l )" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+        echo "" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+        echo "PA = Package Added  R = Requires Added Package  OLD = Not New" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+        for added_source in $(echo ${source_deps_added})
+        do
+          echo "* ${added_source} PA" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+          for added_binary in $(grep " ${added_source}$" ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt | awk '{print $1}')
+            do
+              for wants_added in $(dnf ${DNF_OPTIONS} repoquery --qf "%{name}" --whatrequires ${added_binary} 2>/dev/null | grep -v -e ^None$ -e "Subscription Management")
+                do
+                  # Only work with packages we already know about.  Otherwise you end up with everything.
+                  if [ -f  ${PACKAGE_DIR}/${wants_added} ] || [ -f  ${PACKAGE_ARCHIVE_DIR}/${wants_added} ] ; then
+                    if ! [ "${added_binary}" == "${wants_added}" ] ; then
+                      added_extra="R"
+                      if grep -q ^${wants_added}$ ${DATA_DIR}/${LAST_DIR}/buildroot-source-package-names.txt ; then
+                        added_extra="R OLD"
+                        echo ${wants_added} >> ${DATA_DIR}/${NEW_DIR}/packages.with.changed.dependencies.txt
+                      fi
+                      echo "  * ${wants_added}  ${added_extra}" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+                      archive_and_update ${wants_added}
+                    fi
+                  fi
+                done
+            done
+        done
+      else
+        echo "Total New Sources Added: 0" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md      
+      fi
+      # Work on removed source deps
+      echo "## SOURCE DEPENDENCIES REMOVED" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+      if ! [ "${source_deps_removed}" == "" ] ; then
+        echo "        Removed packages"
+        # Work with removed sources
+        echo "Total Sources Removed: $(cat ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-removed.txt | wc -l )" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+        echo "" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+        echo "PR = Package Removed  N = No longer Needs removed package, or was also removed" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+        for removed_source in $(echo ${source_deps_removed})
+        do
+          echo "* ${removed_source} PR" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+          for wants_removed in $(grep -l ^${removed_source}$ ${PACKAGE_ARCHIVE_DIR}/* ${PACKAGE_DIR}/* 2>/dev/null | awk -F "/" '{print $NF}' | sort -u)
+          do
+            if ! [ "${removed_source}" == "${wants_removed}" ] ; then
+              echo "  * ${wants_removed}  N" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+              archive_and_update ${wants_removed}
+            fi
+          done
+          rm -f ${PACKAGE_DIR}/${removed_source}
+        done
+      else
+        echo "Total Sources Removed: 0" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+      fi
+  fi
+  
+  # If there were changes, do that thing you do
+  if [ "${things_changed}" == "True" ] ; then
+    echo "  There were changes."
+    echo "    Archiving results"
+    mkdir -p ${DATA_DIR}/archive/${TIMESTAMP}
+    cp ${DATA_DIR}/${NEW_DIR}/* ${DATA_DIR}/archive/${TIMESTAMP}/ 2>/dev/null
+    echo "    Setting new files to be the last ones"
+    rm -f ${DATA_DIR}/${LAST_DIR}/*
+    cp ${DATA_DIR}/${NEW_DIR}/* ${DATA_DIR}/${LAST_DIR}/
+    for action in ${action_list}
+      do
+        case ${action} in
+          email | EMAIL | Email )
+            echo "    Mailling out results"
+            #mail -s "Dep Tracker: ${customer} results found" ${email_list} < ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+          ;;
+          package | packages | Package )
+            echo "    Mailling out results"
+            #mail -s "Dep Tracker: ${customer} results found" ${email_list} < ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+          ;;
+          *)
+            echo "    ${action} is not implemented"
+          ;;
+        esac
+      done
+  fi
+# finish with this arch
+done
+exit 0
