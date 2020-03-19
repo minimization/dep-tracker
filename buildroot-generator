@@ -1,6 +1,7 @@
 #!/bin/bash
-# Track dependendencies of a list of packages
-#  and do something (usuall email) when the dependencies change
+# Given a list of packages, generate their buildoort
+#  buildroot means what it would take to build not only that 
+#  package, but all the packages to build the packages.
 #
 
 #####
@@ -19,7 +20,7 @@ PACKAGE_DIR="${WORK_DIR}/packages"
 PACKAGE_LIST_HEAD="Packages"
 NEW_DIR="new"
 LAST_DIR="last"
-DNF_OPTIONS=" -c ${REPO_DIR}/rawhide.repo --disablerepo=* --enablerepo=dt-rawhide --enablerepo=dt-rawhide-source "
+DNF_OPTIONS_BASE=" -c ${REPO_DIR}/rawhide.repo --disablerepo=* --enablerepo=dt-rawhide --enablerepo=dt-rawhide-source "
 LAYER=1
 # BINARY VARIABLES
 : ${VERBOSE:="FALSE"}
@@ -63,6 +64,7 @@ do
   LAYER=1
   PACKAGE_LIST="${PACKAGE_LIST_HEAD}.${this_arch}"
   DATA_DIR="${DATA_DIR_BASE}/${this_arch}"
+  export DNF_OPTIONS=" --forcearch=${this_arch} ${DNF_OPTIONS_BASE}"
   if [ -d ${DATA_DIR}/${NEW_DIR} ] ; then
     rm -f ${DATA_DIR}/${NEW_DIR}/*
   else
@@ -84,7 +86,7 @@ do
       echo
       exit 5
   else
-    get_source_name "${ORIGINAL_LIST[@]} $(dnf --forcearch=${this_arch} ${DNF_OPTIONS} repoquery --qf %{name} --requires --resolve --recursive ${ORIGINAL_LIST[@]} 2>/dev/null)"
+    get_source_name "${ORIGINAL_LIST[@]} $(dnf ${DNF_OPTIONS} repoquery --qf %{name} --requires --resolve --recursive ${ORIGINAL_LIST[@]} 2>/dev/null)"
   fi
   
   # Loop through until we no longer add sources
@@ -96,9 +98,9 @@ do
       echo "Layer: ${LAYER} Number Sources: ${number_sources} New Sources: ${number_new_sources}"
     fi
     let LAYER=${LAYER}+1
-    BINARY_LIST=($(dnf --forcearch=${this_arch} ${DNF_OPTIONS} repoquery --srpm --qf %{name} --requires --resolve ${!SOURCE_LIST[@]} 2>/dev/null))
+    BINARY_LIST=($(dnf ${DNF_OPTIONS} repoquery --srpm --qf %{name} --requires --resolve ${!SOURCE_LIST[@]} 2>/dev/null))
     get_source_name "${BINARY_LIST[@]}"
-    get_source_name "$(dnf --forcearch=${this_arch} ${DNF_OPTIONS} repoquery --qf %{name} --requires --resolve --recursive ${BINARY_LIST[@]} 2>/dev/null )"
+    get_source_name "$(dnf ${DNF_OPTIONS} repoquery --qf %{name} --requires --resolve --recursive ${BINARY_LIST[@]} 2>/dev/null )"
   
     new_number_sources=${#SOURCE_LIST[@]}
     let number_new_sources=${new_number_sources}-${number_sources}
