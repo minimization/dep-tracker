@@ -22,7 +22,7 @@ PACKAGE_CONVERT="${PACKAGE_DIR}/convert/convert.package.nvr.name"
 MAIN_CONF="dt.conf"
 NEW_DIR="new"
 LAST_DIR="last"
-DNF_OPTIONS=" -c ${REPO_DIR}/rawhide.repo --disablerepo=* --enablerepo=dt-rawhide --enablerepo=dt-rawhide-source "
+DNF_OPTIONS_BASE=" -c ${REPO_DIR}/rawhide.repo --disablerepo=* --enablerepo=dt-rawhide --enablerepo=dt-rawhide-source "
 # BINARY VARIABLES
 VERBOSE="FALSE"
 
@@ -41,6 +41,7 @@ archive_and_update(){
     if [ -f  ${PACKAGE_DIR}/${this_source} ] && ! [ -f  ${PACKAGE_ARCHIVE_DIR}/${this_source} ] ; then
       mv ${PACKAGE_DIR}/${this_source} ${PACKAGE_ARCHIVE_DIR}/${this_source}
     fi
+    # ??? why remove it if was moved
     rm -f ${PACKAGE_DIR}/${this_source}
     if grep -q ^${this_source}$ ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ; then
       dnf ${DNF_OPTIONS} repoquery --srpm --qf="%{source_name}" --requires --resolve ${this_source}  2>/dev/null | grep -v Subscription >> ${PACKAGE_DIR}/${this_source}
@@ -103,6 +104,7 @@ for this_arch in ${ARCH_LIST}
 do
   export DATA_DIR="${DATA_DIR_BASE}/${this_arch}"
   export PACKAGE_DIR="${PACKAGE_DIR_BASE}/${this_arch}"
+  export DNF_OPTIONS=" --forcearch=${this_arch} ${DNF_OPTIONS_BASE}"
   TIMESTAMP=$(cat ${DATA_DIR}/${NEW_DIR}/buildroot-date-check.txt)
   export PACKAGE_ARCHIVE_DIR=${PACKAGE_DIR}/archive/${TIMESTAMP}
   PACKAGE_LIST="${PACKAGE_LIST_HEAD}.${this_arch}"
@@ -157,8 +159,8 @@ do
   if diff --brief ${DATA_DIR}/${NEW_DIR}/${PACKAGE_LIST} ${DATA_DIR}/${LAST_DIR}/${PACKAGE_LIST} > /dev/null 2>&1 ; then
   	  echo "    No change in package list"
   else
-  	  things_changed="True"
-  	  echo "    There were changes in the package list"
+      things_changed="True"
+      echo "    There were changes in the package list"
       if [ "${last_change_date}" == "NEVER" ] ; then
         packages_added="$(cat ${DATA_DIR}/${NEW_DIR}/${PACKAGE_LIST})"
         packages_removed=""
