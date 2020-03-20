@@ -13,7 +13,7 @@ source $WORK_DIR/conf/config.inc
 TIMESTAMP=$(date +%Y-%m-%d-%H:%M)
 
 # BINARY VARIABLES
-: ${VERBOSE:="TRUE"}
+: ${VERBOSE:="FALSE"}
 : ${LAYERS:="TRUE"}
 # LIST VARIABLES
 ORIGINAL_LIST=()
