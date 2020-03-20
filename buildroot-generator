@@ -7,23 +7,13 @@
 #####
 # Variables
 #####
-TIMESTAMP=$(date +%Y-%m-%d-%H:%M)
-ARCH_LIST=(aarch64 ppc64le s390x x86_64)
-# DIRS
 WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-#WORK_DIR="~/.dep-tracker"
-CONF_DIR="${WORK_DIR}/conf"
-DATA_DIR_BASE="${WORK_DIR}/data"
-REPO_DIR="${WORK_DIR}/repos"
-PACKAGE_DIR="${WORK_DIR}/packages"
-# FILES/VARIABLES
-PACKAGE_LIST_HEAD="Packages"
-NEW_DIR="new"
-LAST_DIR="last"
-DNF_OPTIONS_BASE=" -c ${REPO_DIR}/rawhide.repo --disablerepo=* --enablerepo=dt-rawhide --enablerepo=dt-rawhide-source "
-LAYER=1
+source $WORK_DIR/conf/config.inc
+
+TIMESTAMP=$(date +%Y-%m-%d-%H:%M)
+
 # BINARY VARIABLES
-: ${VERBOSE:="FALSE"}
+: ${VERBOSE:="TRUE"}
 : ${LAYERS:="TRUE"}
 # LIST VARIABLES
 ORIGINAL_LIST=()
@@ -70,8 +60,7 @@ do
   else
     mkdir -p ${DATA_DIR}/${NEW_DIR}
   fi
-  echo "${TIMESTAMP}" > ${DATA_DIR}/${NEW_DIR}/buildroot-date-check.txt
-  cp ${CONF_DIR}/${PACKAGE_LIST} ${DATA_DIR}/${NEW_DIR}/
+  echo "${TIMESTAMP}" > ${DATA_DIR}/${NEW_DIR}/${BR_TIMESTAMP_FILENAME}
   # Conf Parsing
   ORIGINAL_LIST="$(cat ${CONF_DIR}/${PACKAGE_LIST})"
   
@@ -108,9 +97,8 @@ do
   done
 
   # Write it all out
-  printf "%s\n" "${!SOURCE_LIST[@]}" | sort -o ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt
-  printf "%s\n" "${BINARY_LIST[@]}" | sort -o ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt
-
+  printf "%s\n" "${!SOURCE_LIST[@]}" | sort -o ${DATA_DIR}/${NEW_DIR}/${BR_SOURCE_PKGNAMES_FILENAME}
+  printf "%s\n" "${BINARY_LIST[@]}" | sort -o ${DATA_DIR}/${NEW_DIR}/${BR_BINARY_PKGNAMES_FILENAME}
 # finish with this arch
 done
 exit 0
