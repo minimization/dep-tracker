@@ -31,3 +31,6 @@ BR_BINARY_PKGNAMES_FILENAME="buildroot-binary-package-names.txt"
 BR_SOURCE_PKGNAMES_FILENAME="buildroot-source-package-names.txt"
 BR_ARCHFUL_SOURCE_PKGNAMES_FILENAME="buildroot-archful-srpm-names.txt"
 BR_TIMESTAMP_FILENAME="buildroot-date-check.txt"
+EMAIL_LIST="tdawson@redhat.com"
+DT_ACTION_LIST="email"
+

@@ -6,25 +6,12 @@
 #####
 # Variables
 #####
-TIMESTAMP=$(date +%Y-%m-%d-%H:%M)
-ARCH_LIST="aarch64 ppc64le s390x x86_64"
-# DIRS
 WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-#WORK_DIR="~/.dep-tracker"
-CONF_DIR="${WORK_DIR}/conf"
-REPO_DIR="${WORK_DIR}/repos"
-DATA_DIR_BASE="${WORK_DIR}/data"
-PACKAGE_DIR_BASE="${WORK_DIR}/packages"
-PACKAGE_ARCHIVE_DIR_BASE=${PACKAGE_DIR_BASE}/archive/${TIMESTAMP}
-# FILES/VARIABLES
-PACKAGE_LIST_HEAD="Packages"
-PACKAGE_CONVERT="${PACKAGE_DIR}/convert/convert.package.nvr.name"
-MAIN_CONF="dt.conf"
-NEW_DIR="new"
-LAST_DIR="last"
-DNF_OPTIONS_BASE=" -c ${REPO_DIR}/rawhide.repo --disablerepo=* --enablerepo=dt-rawhide --enablerepo=dt-rawhide-source "
+source $WORK_DIR/conf/config.inc
+
 # BINARY VARIABLES
-VERBOSE="FALSE"
+: ${VERBOSE:="FALSE"}
+
 
 # Given a list of source name, archive then update the package info
 archive_and_update(){
@@ -43,10 +30,10 @@ archive_and_update(){
     fi
     # ??? why remove it if was moved
     rm -f ${PACKAGE_DIR}/${this_source}
-    if grep -q ^${this_source}$ ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ; then
+    if grep -q ^${this_source}$ ${DATA_DIR}/${NEW_DIR}/${BR_SOURCE_PKGNAMES_FILENAME} ; then
       dnf ${DNF_OPTIONS} repoquery --srpm --qf="%{source_name}" --requires --resolve ${this_source}  2>/dev/null | grep -v Subscription >> ${PACKAGE_DIR}/${this_source}
     fi
-    if grep -q ^${this_source}$ ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt ; then
+    if grep -q ^${this_source}$ ${DATA_DIR}/${NEW_DIR}/${BR_BINARY_PKGNAMES_FILENAME} ; then
       dnf ${DNF_OPTIONS} repoquery --qf="%{source_name}" --requires --resolve ${this_source} 2>/dev/null | grep -v Subscription >> ${PACKAGE_DIR}/${this_source}
     fi
     if [ -f ${PACKAGE_DIR}/${this_source} ] ; then
@@ -56,61 +43,19 @@ archive_and_update(){
   return 0
 }
 
-convert_source_to_name(){
-  #if [ "${VERBOSE}" == "TRUE" ] ; then
-        echo "   CONVERTING SOURCE NVRs TO NAMES"
-  #fi
-  file_in="${1}"
-  file_out="${2}"
-  if [ "${file_in}" == "" ] || [ "${file_out}" == "" ] ; then
-    echo "ERROR: convert_source_to_name needs two filenames - received: ${file_in} and ${file_out}"
-    exit 21
-  fi
-  rm -f ${file_out}
-  if ! touch ${file_out} ; then
-    echo "ERROR: cannot use output file: ${file_out}"
-    exit 22
-  fi
-  if [ -s ${file_in} ] ; then
-    cat ${file_in} | while read this_line
-    do
-       binary_name=$(echo "${this_line}" | awk '{print $1}')
-       source_nvr=$(echo "${this_line}" | awk '{print $2}')
-       source_name=$(grep "^${source_nvr} " ${PACKAGE_CONVERT} | awk '{print $2}')
-       if [ "${source_name}" == "" ] ; then
-         new_source_nvr=$(echo ${source_nvr} | sed 's/.rpm$//')
-         source_name=$(dnf ${DNF_OPTIONS} repoquery --qf %{name} ${new_source_nvr} 2>/dev/null | grep -v -e ^None$ -e "Subscription Management")
-         if [ "${source_name}" == "" ] ; then
-           echo "     ERROR: No Source name found for: ${source_nvr}"
-         else
-           #if [ "${VERBOSE}" == "TRUE" ] ; then
-             echo "     New Package: ${source_nvr} ${source_name}"
-           #fi
-           echo "${source_nvr} ${source_name}" >> ${PACKAGE_CONVERT}
-         fi
-       fi
-       echo "${binary_name} ${source_name}" >> ${file_out}
-     done
-  else
-    echo "ERROR: No file with content: ${file_in}"
-    exit 24
-  fi
-}
-
 #####
 # Work through everything one arch at a time
 #####
 for this_arch in ${ARCH_LIST}
 do
   export DATA_DIR="${DATA_DIR_BASE}/${this_arch}"
-  export PACKAGE_DIR="${PACKAGE_DIR_BASE}/${this_arch}"
   export DNF_OPTIONS=" --forcearch=${this_arch} ${DNF_OPTIONS_BASE}"
   TIMESTAMP=$(cat ${DATA_DIR}/${NEW_DIR}/buildroot-date-check.txt)
+  export PACKAGE_DIR="${PACKAGE_DIR_BASE}/${this_arch}"
   export PACKAGE_ARCHIVE_DIR=${PACKAGE_DIR}/archive/${TIMESTAMP}
   PACKAGE_LIST="${PACKAGE_LIST_HEAD}.${this_arch}"
   if ! [ -d ${DATA_DIR}/archive ] ; then
     mkdir -p ${DATA_DIR}/{archive,${NEW_DIR},${LAST_DIR}}
-    mkdir -p ${PACKAGE_DIR}/convert
     last_change_date="NEVER"
   else
     last_change_date="$(cat ${DATA_DIR}/${LAST_DIR}/buildroot-date-check.txt)"
@@ -127,14 +72,11 @@ do
   fi
   echo "${this_arch}"
   things_changed="False"
-  SOURCE_LIST="$(cat ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt)"
+  SOURCE_LIST="$(cat ${DATA_DIR}/${NEW_DIR}/${BR_SOURCE_PKGNAMES_FILENAME})"
   # Clean up files incase we did a partial run
   rm -f  ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt
   rm -f  ${DATA_DIR}/${NEW_DIR}/buildroot-changes*
   rm -f  ${DATA_DIR}/${NEW_DIR}/packages.with.changed.dependencies.txt
-  # Conf Parsing
-  email_list="$(grep ^Email: ${CONF_DIR}/${MAIN_CONF} | cut -d' ' -f2-)"
-  action_list="$(grep ^Action: ${CONF_DIR}/${MAIN_CONF} | cut -d' ' -f2-)"
   
   #####
   # Work
@@ -184,7 +126,7 @@ do
   
   ## Check if there were changes
   echo "  Checking source deps against last set"
-  if diff --brief ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-source-package-names.txt > /dev/null 2>&1 ; then
+  if diff --brief ${DATA_DIR}/${NEW_DIR}/${BR_SOURCE_PKGNAMES_FILENAME} ${DATA_DIR}/${LAST_DIR}/${BR_SOURCE_PKGNAMES_FILENAME} > /dev/null 2>&1 ; then
       echo "      No change in source deps"
       cp ${DATA_DIR}/${LAST_DIR}/binary-source-name.txt ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt
       echo "## SOURCE DEPENDENCIES ADDED" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
@@ -195,23 +137,24 @@ do
       things_changed="True"
       echo "      There were changes in source deps"
       if [ "${last_change_date}" == "NEVER" ] ; then
-        source_deps_added="$(cat ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt)"
-        binary_deps_added="$(cat ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt)"
+        source_deps_added="$(cat ${DATA_DIR}/${NEW_DIR}/${BR_SOURCE_PKGNAMES_FILENAME})"
+        binary_deps_added="$(cat ${DATA_DIR}/${NEW_DIR}/${BR_BINARY_PKGNAMES_FILENAME})"
         source_deps_removed=""
         binary_deps_removed=""
       else
-        source_deps_added="$(comm -23 ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-source-package-names.txt 2>/dev/null)"
-        binary_deps_added="$(comm -23 ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-binary-package-names.txt 2>/dev/null)"
-        source_deps_removed="$(comm -13 ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-source-package-names.txt 2>/dev/null)"
-        binary_deps_removed="$(comm -13 ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt ${DATA_DIR}/${LAST_DIR}/buildroot-binary-package-names.txt 2>/dev/null)"
-        echo "${source_deps_added}" > ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-added.txt
-        echo "${source_deps_removed}" > ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-removed.txt
-        echo "${binary_deps_added}" > ${DATA_DIR}/${NEW_DIR}/buildroot-changes-binaries-added.txt
-        echo "${binary_deps_removed}" > ${DATA_DIR}/${NEW_DIR}/buildroot-changes-binaries-removed.txt
+        source_deps_added="$(comm -23 ${DATA_DIR}/${NEW_DIR}/${BR_SOURCE_PKGNAMES_FILENAME} ${DATA_DIR}/${LAST_DIR}/${BR_SOURCE_PKGNAMES_FILENAME} 2>/dev/null)"
+        binary_deps_added="$(comm -23 ${DATA_DIR}/${NEW_DIR}/${BR_BINARY_PKGNAMES_FILENAME} ${DATA_DIR}/${LAST_DIR}/${BR_BINARY_PKGNAMES_FILENAME} 2>/dev/null)"
+        source_deps_removed="$(comm -13 ${DATA_DIR}/${NEW_DIR}/${BR_SOURCE_PKGNAMES_FILENAME} ${DATA_DIR}/${LAST_DIR}/${BR_SOURCE_PKGNAMES_FILENAME} 2>/dev/null)"
+        binary_deps_removed="$(comm -13 ${DATA_DIR}/${NEW_DIR}/${BR_BINARY_PKGNAMES_FILENAME} ${DATA_DIR}/${LAST_DIR}/${BR_BINARY_PKGNAMES_FILENAME} 2>/dev/null)"
       fi
+      echo "${source_deps_added}" > ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-added.txt
+      echo "${source_deps_removed}" > ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-removed.txt
+      echo "${binary_deps_added}" > ${DATA_DIR}/${NEW_DIR}/buildroot-changes-binaries-added.txt
+      echo "${binary_deps_removed}" > ${DATA_DIR}/${NEW_DIR}/buildroot-changes-binaries-removed.txt
       #echo "ADDED: ${source_deps_added}"
       #echo "REMOVED: ${source_deps_removed}"
       # Update all added and removed source deps
+      echo "        Updating and archiving dependency files for changed sources"
       for changed_source in $(echo ${source_deps_added} ${source_deps_removed} ${binary_deps_added} ${binary_deps_removed})
         do
           archive_and_update ${changed_source}
@@ -222,9 +165,7 @@ do
       if ! [ "${source_deps_added}" == "" ] ; then
         echo "        Added packages"
         # Update binary-source-name.txt
-        dnf ${DNF_OPTIONS} repoquery --srpm --qf "%{name} %{sourcerpm}" --requires --resolve ${SOURCE_LIST[@]} 2>/dev/null | grep -v -e ^None$ -e "Subscription Management" | sort -o ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt.tmp
-        convert_source_to_name ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt.tmp ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt
-        rm -f ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt.tmp
+        dnf ${DNF_OPTIONS} repoquery --srpm --qf "%{name} %{source_name}" --requires --resolve ${SOURCE_LIST[@]} 2>/dev/null | grep -v -i -e '^None$' -e '^(none)$' -e 'Subscription Management' | sort -o ${DATA_DIR}/${NEW_DIR}/binary-source-name.txt
         # Work with added sources
         echo "Total New Sources Added: $(cat ${DATA_DIR}/${NEW_DIR}/buildroot-changes-sources-added.txt | wc -l )" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
         echo "" >> ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
@@ -240,7 +181,7 @@ do
                   if [ -f  ${PACKAGE_DIR}/${wants_added} ] || [ -f  ${PACKAGE_ARCHIVE_DIR}/${wants_added} ] ; then
                     if ! [ "${added_binary}" == "${wants_added}" ] ; then
                       added_extra="R"
-                      if grep -q ^${wants_added}$ ${DATA_DIR}/${LAST_DIR}/buildroot-source-package-names.txt ; then
+                      if grep -q ^${wants_added}$ ${DATA_DIR}/${LAST_DIR}/${BR_SOURCE_PKGNAMES_FILENAME} > /dev/null 2>&1 ; then
                         added_extra="R OLD"
                         echo ${wants_added} >> ${DATA_DIR}/${NEW_DIR}/packages.with.changed.dependencies.txt
                       fi
@@ -288,16 +229,16 @@ do
     echo "    Setting new files to be the last ones"
     rm -f ${DATA_DIR}/${LAST_DIR}/*
     cp ${DATA_DIR}/${NEW_DIR}/* ${DATA_DIR}/${LAST_DIR}/
-    for action in ${action_list}
+    for action in ${DT_ACTION_LIST}
       do
         case ${action} in
           email | EMAIL | Email )
             echo "    Mailling out results"
-            #mail -s "Dep Tracker: ${customer} results found" ${email_list} < ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+            #mail -s "Dep Tracker: ${customer} results found" ${EMAIL_LIST} < ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
           ;;
           package | packages | Package )
             echo "    Mailling out results"
-            #mail -s "Dep Tracker: ${customer} results found" ${email_list} < ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
+            #mail -s "Dep Tracker: ${customer} results found" ${EMAIL_LIST} < ${DATA_DIR}/${NEW_DIR}/buildroot-changes.md
           ;;
           *)
             echo "    ${action} is not implemented"
