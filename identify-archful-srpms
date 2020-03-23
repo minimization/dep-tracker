@@ -1,0 +1,138 @@
+#!/bin/bash
+
+WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source $WORK_DIR/conf/config.inc
+
+errexit(){
+    echo "$@" >&2
+    exit 5
+}
+
+#####
+# Variables
+#####
+# DIRS
+# FILES/VARIABLES
+# BINARY VARIABLES
+# LIST VARIABLES
+# ASSOCIATIVE ARRAY VARIABLES
+declare -A MERGED_SOURCE_LIST
+declare -A ARCHFUL_SOURCE_LIST
+declare -A SRPM_DOWNLOADED_LIST
+
+#####
+# General setup
+#####
+
+dnf --quiet clean all
+
+echo "Identifying source packages that may differ based on architecture  ..."
+
+#####
+# Loop through all architectures, merging the buildroot source package lists
+#####
+MERGED_SOURCE_LIST=()
+for this_arch in ${ARCH_LIST[@]}
+do
+  echo "Merging source package list for arch ${this_arch} ..."
+
+  DATA_DIR="${DATA_DIR_BASE}/${this_arch}/${NEW_DIR}"
+  BR_TIMESTAMP_FILE="${DATA_DIR}/${BR_TIMESTAMP_FILENAME}"
+  BR_SRC_PKGS_FILE="${DATA_DIR}/${BR_SOURCE_PKGNAMES_FILENAME}"
+  if [ ! -r "${BR_TIMESTAMP_FILE}" ] ; then
+    errexit "Missing buildroot timestmap file for arch ${this_arch}: ${BR_TIMESTAMP_FILE}"
+  fi
+  if [ ! -r "${BR_SRC_PKGS_FILE}" ] ; then
+    errexit "Missing buildroot source package list file for arch ${this_arch}: ${BR_SRC_PKGS_FILE}"
+  fi
+
+  TIMESTAMP=$(cat "${BR_TIMESTAMP_FILE}")
+  mapfile -t BR_SRC_PKGS < "${BR_SRC_PKGS_FILE}"
+
+  if [ ${#BR_SRC_PKGS[@]} -eq 0 ] ; then
+    errexit "No buildroot source packages listed in ${BR_SRC_PKGS_FILE}."
+  fi
+
+  #####
+  # Work
+  #####
+
+  echo "Timestap is ${TIMESTAMP}."
+  echo "${#BR_SRC_PKGS[@]} buildroot source packages for arch ${thisarch}."
+
+  for this_package in ${BR_SRC_PKGS[@]}
+  do
+    MERGED_SOURCE_LIST[${this_package}]=1
+  done
+
+# finish with this arch
+done
+
+echo "${#MERGED_SOURCE_LIST[@]} buildroot source packages for all architectures combined."
+
+#
+# TODO? cleanup or archive any existing SRPMs in directory
+#
+
+DATA_DIR="${DATA_DIR_BASE}/source/${NEW_DIR}"
+SRPMS_DIR="${DATA_DIR}/srpms"
+mkdir -p "${SRPMS_DIR}"
+
+echo "Downloading SRPMs."
+
+# pick first arch for source download, since they're all the same
+src_dl_arch=${ARCH_LIST[0]}
+dnf --quiet --forcearch=${src_dl_arch} ${DNF_OPTIONS_SOURCE_ONLY} download --downloaddir "${SRPMS_DIR}" --source ${!MERGED_SOURCE_LIST[@]}
+
+echo "Checking SRPMs."
+
+# Create mapping of package names to SRPM files
+SRPM_DOWNLOADED_LIST=()
+for srpm in ${SRPMS_DIR}/*.src.rpm
+do
+  pkgname=$(rpm -q --qf "%{name}" -p ${srpm})
+  if [ -v SRPM_DOWNLOADED_LIST[${pkgname}] ]; then
+    echo "WARNING: Found multiple SRPMs for package ${pkgname}!"
+  fi
+  SRPM_DOWNLOADED_LIST[${pkgname}]="${srpm}"
+done
+
+# Check that all source packages have been downloaded
+for pkgname in ${!MERGED_SOURCE_LIST[@]}
+do
+  if [ ! -v SRPM_DOWNLOADED_LIST[${pkgname}] ]; then
+    echo "WARNING: SRPM for package ${pkgname} was not downloaded!"
+  fi
+done
+
+# Check each downloaded package to see if it is archful
+ARCHFUL_SOURCE_LIST=()
+for pkgname in ${!SRPM_DOWNLOADED_LIST[@]}
+do
+  srpm=${SRPM_DOWNLOADED_LIST[${pkgname}]}
+  specname="${pkgname}.spec"
+  rpm2cpio ${srpm} | cpio --extract --quiet --unconditional --directory "${SRPMS_DIR}" "${specname}"
+
+  specpath="${SRPMS_DIR}/${specname}"
+  if [ ! -r "${specpath}" ] ; then
+    errexit "Failed to extract SPEC file from ${srpm}!"
+  fi
+
+  if egrep '[[:blank:]]*%ifn?arch[[:blank:]]' "${specpath}" >/dev/null; then
+    [ "${VERBOSE}" == "TRUE" ] && echo "${pkgname} is archful."
+    ARCHFUL_SOURCE_LIST[${pkgname}]=1
+  else
+    [ "${VERBOSE}" == "TRUE" ] && echo "${pkgname} is NOT archful."
+  fi
+done
+
+echo "${#ARCHFUL_SOURCE_LIST[@]} archful buildroot source packages identified."
+
+# Write out the list of archful source packages
+printf "%s\n" "${!ARCHFUL_SOURCE_LIST[@]}" | sort -o "${DATA_DIR}/${BR_ARCHFUL_SOURCE_PKGNAMES_FILENAME}"
+
+#
+# TODO? cleanup SRPMs and/or SPEC files
+#
+
+exit 0
