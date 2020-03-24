@@ -34,7 +34,7 @@ echo "Identifying source packages that may differ based on architecture  ..."
 MERGED_SOURCE_LIST=()
 for this_arch in ${ARCH_LIST[@]}
 do
-  echo "Merging source package list for arch ${this_arch} ..."
+  echo "Merging source package list for arch ${this_arch}..."
 
   DATA_DIR="${DATA_DIR_BASE}/${this_arch}/${NEW_DIR}"
   BR_TIMESTAMP_FILE="${DATA_DIR}/${BR_TIMESTAMP_FILENAME}"
@@ -58,7 +58,7 @@ do
   #####
 
   echo "Timestap is ${TIMESTAMP}."
-  echo "${#BR_SRC_PKGS[@]} buildroot source packages for arch ${thisarch}."
+  echo "${#BR_SRC_PKGS[@]} buildroot source packages for arch ${this_arch}."
 
   for this_package in ${BR_SRC_PKGS[@]}
   do
