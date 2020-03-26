@@ -20,13 +20,6 @@ declare -A MERGED_SOURCE_LIST
 declare -A ARCHFUL_SOURCE_LIST
 declare -A SRPM_DOWNLOADED_LIST
 
-#####
-# General setup
-#####
-
-dnf --quiet clean all
-
-echo "Identifying source packages that may differ based on architecture  ..."
 
 # merge_source_package_lists
 #
@@ -215,18 +208,34 @@ find_archful_source_packages() {
   echo "${#ARCHFUL_SOURCE_LIST[@]} archful buildroot source packages identified."
 }
 
-# write_archful_source_package_list outfile
-# outfile: file to which to write sorted list
+# write_source_package_lists data_dir
+# data_dir: directory to which to write package lists
 #
-# Write out the list of archful source packages
-write_archful_source_package_list() {
-  local outfile="$1"
-  printf "%s\n" "${!ARCHFUL_SOURCE_LIST[@]}" | sort -o "$outfile"
+# Write out the list of archful source packages and mapping of package
+# names to SRPM base file names.
+write_source_package_lists() {
+  local data_dir="$1"
+  local archful_pkglist_file="${data_dir}/${BR_ARCHFUL_SOURCE_PKGNAMES_FILENAME}"
+  local pkg_to_srpm_map_file="${data_dir}/${BR_SOURCE_PKGMAP_FILENAME}"
+
+  # write out the list of archful source packages
+  printf "%s\n" "${!ARCHFUL_SOURCE_LIST[@]}" | sort -o "${archful_pkglist_file}"
+
+  # write out the mapping of package names to SRPM base file names
+  for pkgname in ${!SRPM_DOWNLOADED_LIST[@]}
+  do
+    echo "${pkgname}=${SRPM_DOWNLOADED_LIST[${pkgname}]##*/}"
+  done \
+  | sort -o "${pkg_to_srpm_map_file}"
 }
+
+
+dnf --quiet clean all
+
+echo "Identifying source packages that may differ based on architecture  ..."
 
 data_dir="${DATA_DIR_BASE}/source/${NEW_DIR}"
 srpm_dir="${data_dir}/srpms"
-archful_pkglist_file="${data_dir}/${BR_ARCHFUL_SOURCE_PKGNAMES_FILENAME}"
 
 merge_source_package_lists
 
@@ -238,6 +247,6 @@ check_source_rpms "${srpm_dir}"
 
 find_archful_source_packages "${srpm_dir}"
 
-write_archful_source_package_list "${archful_pkglist_file}"
+write_source_package_lists "${data_dir}"
 
 exit 0
