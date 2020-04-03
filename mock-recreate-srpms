@@ -1,0 +1,136 @@
+#!/usr/bin/bash
+# Usage: $0 output-dir srpm-dir srpm-list-file [ version ]
+#
+# Based upon mock_wrapper.sh, recreate_srpm.sh, and populate_srpm_repo.sh
+# from https://github.com/fedora-modularity/baseruntime-package-lists
+
+errexit() {
+    echo "$@" >&2
+    exit 5
+}
+
+if [ $# -lt 3 -o $# -gt 4 ]; then
+    errexit "Usage: $0 output-dir srpm-dir srpm-list-file [ version ]"
+fi
+
+output_dir="$1"
+srpm_dir="$2"
+srpm_list_file="$3"
+release_ver="${4:-rawhide}"
+
+WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source $WORK_DIR/conf/config.inc
+
+set -e
+
+nproc=$(/usr/bin/getconf _NPROCESSORS_ONLN)
+
+vernum=${release_ver}
+if [ "${release_ver}" == "rawhide" ]; then
+    vernum=33
+fi
+
+# load list of srpms from input file into array variable
+mapfile -t srpm_list < "${srpm_list_file}"
+# make sure we have just the basenames of the SRPMs
+srpm_basename_list=(${srpm_list[@]##*/})
+
+mock_cfg=${WORK_DIR}/fedora-${release_ver}-srpm.cfg
+
+cat > ${mock_cfg} <<EOF
+config_opts['root'] = 'fedora-$release_ver-srpm'
+config_opts['target_arch'] = 'x86_64'
+config_opts['legal_host_arches'] = ('x86_64')
+config_opts['chroot_setup_cmd'] = 'install bash fedora-release fedpkg gnupg2 git-core redhat-rpm-config rpm-build shadow-utils gawk koji glibc-minimal-langpack rpmdevtools'
+config_opts['dist'] = 'fc$vernum'  # only useful for --resultdir variable subst
+config_opts['extra_chroot_dirs'] = [ '/run/lock', ]
+config_opts['releasever'] = '$vernum'
+config_opts['package_manager'] = 'dnf'
+config_opts['use_bootstrap'] = False
+config_opts['rpmbuild_networking'] = True
+
+# Configure bind mounts for the the srpms and output directories
+config_opts['plugin_conf']['bind_mount_enable'] = True
+config_opts['plugin_conf']['bind_mount_opts']['dirs'].append(('$srpm_dir', '/opt/srpm/srpms/' ))
+config_opts['plugin_conf']['bind_mount_opts']['dirs'].append(('$output_dir', '/opt/srpm/output/' ))
+
+config_opts['yum.conf'] = """
+[main]
+keepcache=1
+debuglevel=2
+reposdir=/dev/null
+logfile=/var/log/yum.log
+retries=20
+obsoletes=1
+gpgcheck=0
+assumeyes=1
+syslog_ident=mock
+syslog_device=
+install_weak_deps=0
+metadata_expire=0
+mdpolicy=group:primary
+best=1
+
+# repos
+$(cat ${REPO_DIR}/${release_ver}.repo)
+"""
+EOF
+
+# read script into variable; use ! to bypass "set -e" exit
+! read -r -d '' mock_recreate_srpm_script <<'EOF'
+#!/usr/bin/bash
+
+if [ $# -ne 1 ]; then
+    echo "Missing source-rpm argument"
+    echo "Usage: recreate_srpm.sh source-rpm"
+    exit 1
+fi
+
+srpm="$1"
+
+pkgname=$(rpm -q --nosignature --qf "%{name}" -p ${srpm})
+
+echo "Rebuilding ${pkgname} SRPMs from ${srpm}"
+
+output_dir=$(pwd)
+scratch_dir=$(mktemp -d)
+
+pushd ${scratch_dir}
+
+rpm2cpio ${srpm} | cpio -idm
+
+for arch in __ARCH_LIST__; do
+    mkdir -p ${output_dir}/${arch}/sources
+    rpmbuild -bs \
+             --build-in-place \
+             --target=${arch} \
+             --define "_sourcedir ${scratch_dir}" \
+             --define "_srcrpmdir ${output_dir}/${arch}/sources" \
+             ${pkgname}.spec
+done
+
+popd # ${scratch_dir}
+
+rm -rf ${scratch_dir}
+EOF
+
+# fill in architecture list placeholder with actual list
+mock_recreate_srpm_script="${mock_recreate_srpm_script//__ARCH_LIST__/${ARCH_LIST[@]}}"
+
+# make sure target output directory exists
+mkdir -p "${output_dir}"
+
+mock -r ${mock_cfg} --init
+# Note: the mock configuration bind mounts the srpms and output directories
+mock -r ${mock_cfg} --chroot "mkdir -p /opt/srpm/srpms /opt/srpm/output"
+mock -r ${mock_cfg} --copyin /dev/stdin /opt/srpm/recreate_srpm.sh \
+                             <<<"${mock_recreate_srpm_script}"
+mock -r ${mock_cfg} --copyin /dev/stdin /opt/srpm/srpm-list.txt \
+                             <<<$(printf "/opt/srpm/srpms/%s\n" ${srpm_basename_list[@]})
+mock -r ${mock_cfg} --chroot "
+    cd /opt/srpm/output
+    chmod a+rx /opt/srpm/recreate_srpm.sh
+    cat /opt/srpm/srpm-list.txt | xargs --max-procs=${nproc} -I SRPM /opt/srpm/recreate_srpm.sh SRPM
+"
+# reset ownership of output directory
+mock -r ${mock_cfg} --chroot "chown -R mockbuild:mock /opt/srpm/output"

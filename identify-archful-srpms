@@ -77,12 +77,13 @@ merge_source_package_lists() {
 # pkg1 ...: list of base package names for which to download source rpms
 download_source_rpms() {
   local srpm_dir="$1"
-  shift
+  local -a pkg_list=("${@:2}")
+
   # pick first arch as forced arch for source download, since they're all the same
   local src_dl_arch=${ARCH_LIST[0]}
 
   echo "Downloading SRPMs."
-  dnf --quiet --forcearch=${src_dl_arch} ${DNF_OPTIONS_SOURCE_ONLY} download --downloaddir "${srpm_dir}" --source "$@"
+  dnf --quiet --forcearch=${src_dl_arch} ${DNF_OPTIONS_SOURCE_ONLY} download --downloaddir "${srpm_dir}" --source "${pkg_list[@]}"
 }
 
 # order_srpm_files srpm1 srpm2
