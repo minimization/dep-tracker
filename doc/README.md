@@ -1,4 +1,5 @@
 # Buildroot Generator Workflow
+![Buildroot Generator Workflow](https://raw.githubusercontent.com/minimization/dep-tracker/master/doc/buildroot-generator-workflow.svg)
 
 ## 1 Workloads tagged into ELN
 Each workload contains the minimun packages needed to do whatever work is required.
