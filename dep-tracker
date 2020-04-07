@@ -46,7 +46,7 @@ archive_and_update(){
 #####
 # Work through everything one arch at a time
 #####
-for this_arch in ${ARCH_LIST}
+for this_arch in ${ARCH_LIST[@]}
 do
   export DATA_DIR="${DATA_DIR_BASE}/${this_arch}"
   export DNF_OPTIONS=" --forcearch=${this_arch} ${DNF_OPTIONS_BASE}"
