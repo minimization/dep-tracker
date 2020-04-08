@@ -1,9 +1,12 @@
 #!/bin/bash
-# Usage: create-srpm-buildroot-repos
+# Usage: create-srpm-repos
 
 WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source $WORK_DIR/conf/config.inc
 
+eecho() {
+    echo "$@" >&2
+}
 errexit() {
     echo "$@" >&2
     exit 5
@@ -19,19 +22,20 @@ errexit() {
 # ASSOCIATIVE ARRAY VARIABLES
 declare -A ARCHFUL_SOURCE_LIST
 declare -A SRPM_MAPPING
+declare -A SRPM_REV_MAPPING
 declare -a SOURCE_LIST
 
 
 # read_source_package_lists outfile
 # data_dir: directory from which to read package lists
-# srpm_dir: directory in which source rpms can be found
 #
 # Read in the list of archful source packages into global associative
-# array ARCHFUL_SOURCE_LIST, and the mapping of package names to SRPM
-# file names into global associative array SRPM_MAPPING.
+# array ARCHFUL_SOURCE_LIST, the mapping of package names to SRPM
+# file basenames into global associative array SRPM_MAPPING. The mapping
+# of SRPM file basenames to package names is also placed into global
+# associative array SRPM_REV_MAPPING.
 read_source_package_lists() {
   local data_dir="$1"
-  local srpm_dir="$2"
 
   local archful_pkglist_file="${data_dir}/${BR_ARCHFUL_SOURCE_PKGNAMES_FILENAME}"
   local pkg_to_srpm_map_file="${data_dir}/${BR_SOURCE_PKGMAP_FILENAME}"
@@ -46,7 +50,8 @@ read_source_package_lists() {
   # read in the mapping of package names to SRPM base file names
   while IFS="=" read pkgname srpm
   do
-    SRPM_MAPPING[${pkgname}]="${srpm_dir}/${srpm}"
+    SRPM_MAPPING[${pkgname}]="${srpm}"
+    SRPM_REV_MAPPING[${srpm}]="${pkgname}"
   done < "${pkg_to_srpm_map_file}"
 
   echo "${#ARCHFUL_SOURCE_LIST[@]} archful buildroot source packages."
@@ -69,26 +74,40 @@ read_arch_source_package_list() {
   echo "Reading source package list for arch ${arch}..."
 
   if [ ! -r "${src_pkgs_file}" ] ; then
-    errexit "Missing buildroot source package list file for arch ${arch}: ${src_pkgs_file}"
+    errexit "ERROR: Missing buildroot source package list file for arch ${arch}: ${src_pkgs_file}"
   fi
 
   mapfile -t SOURCE_LIST < "${src_pkgs_file}"
 
   if [ ${#SOURCE_LIST[@]} -eq 0 ] ; then
-    errexit "No buildroot source packages listed in ${src_pkgs_file}."
+    errexit "ERROR: No buildroot source packages listed in ${src_pkgs_file}."
   fi
 
   echo "${#SOURCE_LIST[@]} buildroot source packages for arch ${arch}."
 }
 
-# populate_arch_source_rpm_repo arch arch_repo_dir pkg1 pkg2 ...
+# repo_dir_for_arch arch
+repo_dir_for_arch() {
+  local arch="$1"
+  echo "${DATA_DIR_BASE}/repos/${NEW_DIR}/${arch}"
+}
+
+# data_dir_for_arch arch
+data_dir_for_arch() {
+  local arch="$1"
+  echo "${DATA_DIR_BASE}/${arch}/${NEW_DIR}"
+}
+
+# populate_arch_source_rpm_repo arch arch_repo_dir srpm_dir pkg1 pkg2 ...
 # arch: the architecture
 # arch_repo_dir: arch-specific directory for repos
+# srpm_dir: directory in which source rpms can be found
 # pkg1 ...: list of base source package names to add to repo
 populate_arch_source_rpm_repo() {
   local arch="$1"
   local arch_repo_dir="$2"
-  local -a pkg_list=("${@:3}")
+  local srpm_dir="$3"
+  local -a pkg_list=("${@:4}")
 
   local this_package srpm srpm_in_repo
 
@@ -98,20 +117,76 @@ populate_arch_source_rpm_repo() {
   for this_package in "${pkg_list[@]}"
   do
     srpm="${SRPM_MAPPING[${this_package}]}"
-    srpm_in_repo="${arch_repo_dir}/sources/${srpm##*/}"
+    srpm_in_repo="${arch_repo_dir}/sources/${srpm}"
     if [ -v ARCHFUL_SOURCE_LIST["${this_package}"] ]; then
-      # archful SRPMs should already exist since they were previously rebuilt
+      # archful SRPMs should already exist since they were just rebuilt
       if [ ! -r "${srpm_in_repo}" ]; then
-        echo "WARNING: Archful SRPM missing from target repo location!: ${srpm_in_repo}"
+        echo "WARNING: Archful SRPM ${srpm} for ${arch} expected but not found in target repo"
       fi
       continue
     fi
     # make a hard link from source directory if not present in repo
     if [ ! -r "${srpm_in_repo}" ]; then
-      ln "${srpm}" "${srpm_in_repo}"
+      ln "${srpm_dir}/${srpm}" "${srpm_in_repo}"
     fi
   done
 }
+
+
+# clean_source_rpm_repo repo_dir pkg1 pkg2 ...
+# repo_dir: arch-specific directory for repos
+# pkg1 ...: list of base source package names to add to repo
+clean_source_rpm_repo() {
+  local repo_dir="$1"
+  local -a pkg_list=("${@:2}")
+
+  local -A pkg_assoc_list
+  local srpm srpm_in_repo
+  local -A repo_srpm_map
+  local pkgname
+
+  echo "Cleaning source package repo"
+
+  # make an associate array from pkg_list for quick lookup
+  for this_package in "${pkg_list[@]}"
+  do
+    pkg_assoc_list[${this_package}]=1
+  done
+
+  # loop through all SRPMs in the source repo directory,
+  # mapping out what package they belong to
+  for srpm in $(cd "${repo_dir}/sources/" && ls *.src.rpm)
+  do
+    srpm_in_repo="${repo_dir}/sources/${srpm}"
+
+    if [ -v SRPM_REV_MAPPING[${srpm}] ]; then
+      pkgname=${SRPM_REV_MAPPING[${srpm}]}
+    else
+      # SRPM name doesn't match the known set, see what package in contains
+      pkgname=$(rpm -q --nosignature --qf "%{name}" -p ${srpm_in_repo})
+    fi
+
+    repo_srpm_map[${srpm}]=${pkgname}
+  done
+
+  for srpm in ${!repo_srpm_map[@]}
+  do
+    srpm_in_repo="${repo_dir}/sources/${srpm}"
+    pkgname=${repo_srpm_map[${srpm}]}
+
+    # clean up outdated packages, and those not wanted for this arch
+    if [ ! -v pkg_assoc_list[${pkgname}] ]; then
+       echo "NOTICE: Package ${pkgname} does not belong in the repo for this arch, removing"
+       rm -f "${srpm_in_repo}"
+       continue
+    fi
+
+    if [ "${srpm}" !=  "${SRPM_MAPPING[${pkgname}]}" ]; then
+      echo "NOTICE: Found ${srpm} instead of expected ${SRPM_MAPPING[${pkgname}]}"
+    fi
+  done
+}
+
 
 # recreate_archful_source_packages repos_dir srpm_dir pkg1 pkg2 ...
 # repos_dir: top level directory for repos
@@ -122,7 +197,8 @@ recreate_archful_source_packages() {
   local srpm_dir="$2"
   local -a pkg_list=("${@:3}")
 
-  local this_package srpm
+  local this_package srpm srpm_in_repo
+  local this_arch all_arches
   local scratch_srpm_file=$(mktemp)
 
   echo "Recreating source packages for ${#pkg_list[@]} archful packages"
@@ -130,7 +206,25 @@ recreate_archful_source_packages() {
   # write out a list to all of the source packages to be rebuilt
   for this_package in "${pkg_list[@]}"
   do
-    echo "${SRPM_MAPPING[${this_package}]##*/}"
+    srpm="${SRPM_MAPPING[${this_package}]}"
+    # Check if all per-arch SRPMs already present
+    all_arches=true
+    for this_arch in ${ARCH_LIST[@]}
+    do
+      srpm_in_repo="$(repo_dir_for_arch ${this_arch})/sources/${srpm}"
+      if [ ! -r "${srpm_in_repo}" ]; then
+        eecho "${srpm} is missing for arch ${this_arch}; rebuilding"
+        all_arches=false
+        break
+      fi
+    done
+
+    if [ ${all_arches} == true ]; then
+      continue
+    fi
+
+    # package is missing SRPM for at least one arch; add to rebuild list
+    echo "${srpm}"
   done > "${scratch_srpm_file}"
 
   # Usage: mock-recreate-srpms output-dir srpm-dir srpm-list-file [ version ]
@@ -156,20 +250,24 @@ data_dir="${DATA_DIR_BASE}/source/${NEW_DIR}"
 srpm_dir="${data_dir}/srpms"
 repos_dir="${DATA_DIR_BASE}/repos/${NEW_DIR}"
 
-read_source_package_lists "${data_dir}" "${srpm_dir}"
+read_source_package_lists "${data_dir}"
+
+echo "Rebuilding architecture-specific source packages ..."
 
 recreate_archful_source_packages "${repos_dir}" "${srpm_dir}" ${!ARCHFUL_SOURCE_LIST[@]}
 
 for this_arch in ${ARCH_LIST[@]}
 do
-  echo "Working on arch ${this_arch}  ..."
+  echo "Working on repo for arch ${this_arch}  ..."
 
-  arch_data_dir="${DATA_DIR_BASE}/${this_arch}/${NEW_DIR}"
-  arch_repo_dir="${DATA_DIR_BASE}/repos/${NEW_DIR}/${this_arch}"
+  arch_data_dir="$(data_dir_for_arch ${this_arch})"
+  arch_repo_dir="$(repo_dir_for_arch ${this_arch})"
 
   read_arch_source_package_list ${this_arch} "${arch_data_dir}"
 
-  populate_arch_source_rpm_repo ${this_arch} "${arch_repo_dir}" ${SOURCE_LIST[@]}
+  populate_arch_source_rpm_repo ${this_arch} "${arch_repo_dir}" "${srpm_dir}" ${SOURCE_LIST[@]}
+
+  clean_source_rpm_repo "${arch_repo_dir}" ${SOURCE_LIST[@]}
 
   update_arch_repo_metadata ${this_arch} "${arch_repo_dir}"
 done
