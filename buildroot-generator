@@ -61,9 +61,9 @@ do
     mkdir -p ${DATA_DIR}/${NEW_DIR}
   fi
   echo "${TIMESTAMP}" > ${DATA_DIR}/${NEW_DIR}/${BR_TIMESTAMP_FILENAME}
-  cp ${CONF_DIR}/${PACKAGE_LIST} ${DATA_DIR}/${NEW_DIR}/${PACKAGE_LIST}
-  # Conf Parsing
-  ORIGINAL_LIST="$(cat ${CONF_DIR}/${PACKAGE_LIST})"
+  cp ${PACKAGELIST_DIR}/${PACKAGE_LIST} ${DATA_DIR}/${NEW_DIR}/${PACKAGE_LIST}
+  # Load Original List
+  ORIGINAL_LIST="$(cat ${PACKAGELIST_DIR}/${PACKAGE_LIST})"
   
   #####
   # Work

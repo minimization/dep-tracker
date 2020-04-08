@@ -19,14 +19,13 @@ ARCH_LIST=(aarch64 ppc64le s390x x86_64)
 CONF_DIR="${WORK_DIR}/conf"
 REPO_DIR="${WORK_DIR}/repos"
 DATA_DIR_BASE="${WORK_DIR}/data"
+PACKAGELIST_DIR="${CONF_DIR}"
 PACKAGE_DIR_BASE="${WORK_DIR}/packages"
 # FILES/VARIABLES
 PACKAGE_LIST_HEAD="Packages"
+REPONAME="rawhide"
 NEW_DIR="new"
 LAST_DIR="last"
-DNF_OPTIONS_BASE="-c ${REPO_DIR}/rawhide.repo --disablerepo=* --enablerepo=dt-rawhide --enablerepo=dt-rawhide-source -y"
-DNF_OPTIONS_SOURCE_ONLY="-c ${REPO_DIR}/rawhide.repo --disablerepo=* --enablerepo=dt-rawhide-source"
-DNF_OPTIONS_BINARY_ONLY="-c ${REPO_DIR}/rawhide.repo --disablerepo=* --enablerepo=dt-rawhide"
 BR_BINARY_PKGNAMES_FILENAME="buildroot-binary-package-names.txt"
 BR_SOURCE_PKGNAMES_FILENAME="buildroot-source-package-names.txt"
 BR_ARCHFUL_SOURCE_PKGNAMES_FILENAME="buildroot-archful-srpm-names.txt"
@@ -35,3 +34,50 @@ BR_TIMESTAMP_FILENAME="buildroot-date-check.txt"
 EMAIL_LIST="tdawson@redhat.com"
 DT_ACTION_LIST="email"
 
+###############
+# Show help
+###############
+usage() {
+  echo "Usage `basename $0` <options>" >&2
+  echo >&2
+  echo "Options:" >&2
+  echo "  -r | --repo [reponame]" >&2
+  echo "    Use the repo file.  Default: ${REPONAME}" >&2
+  echo "  -p | --pkglist [packagelist-dir]" >&2
+  echo "    Package lists are in this dir.  Default: ${PACKAGELIST_DIR} " >&2
+  echo >&2
+  popd &>/dev/null
+  exit 1
+}
+
+###############
+# Get our arguments
+###############
+while [[ "$#" -ge 1 ]]
+do
+  key="$1"
+  case $key in
+    -r | --repo )
+        REPONAME="${2}"
+        shift
+    ;;
+    -p | --pkglist )
+        PACKAGELIST_DIR="${2}"
+        shift
+    ;;
+    * )
+      echo
+      usage
+      exit 2	
+    ;;
+  esac
+  shift # past argument or value
+done
+
+#####
+# Variables
+#   That might change with command line options
+#####
+DNF_OPTIONS_BASE="-c ${REPO_DIR}/${REPONAME}.repo --disablerepo=* --enablerepo=dt-main --enablerepo=dt-main-source -y"
+DNF_OPTIONS_SOURCE_ONLY="-c ${REPO_DIR}/${REPONAME}.repo --disablerepo=* --enablerepo=dt-main-source"
+DNF_OPTIONS_BINARY_ONLY="-c ${REPO_DIR}/${REPONAME}.repo --disablerepo=* --enablerepo=dt-main"
