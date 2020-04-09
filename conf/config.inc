@@ -65,11 +65,6 @@ do
         PACKAGELIST_DIR="${2}"
         shift
     ;;
-    * )
-      echo
-      usage
-      exit 2	
-    ;;
   esac
   shift # past argument or value
 done
