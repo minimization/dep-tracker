@@ -227,8 +227,8 @@ recreate_archful_source_packages() {
     echo "${srpm}"
   done > "${scratch_srpm_file}"
 
-  # Usage: mock-recreate-srpms output-dir srpm-dir srpm-list-file [ version ]
-  ${WORK_DIR}/mock-recreate-srpms "${repos_dir}" "${srpm_dir}" "${scratch_srpm_file}"
+  # Usage: mock-recreate-srpms [ --repo reponame ] output-dir srpm-dir srpm-list-file
+  ${WORK_DIR}/mock-recreate-srpms --repo "${REPONAME}" "${repos_dir}" "${srpm_dir}" "${scratch_srpm_file}"
 
   rm -f "${scratch_srpm_file}"
 }

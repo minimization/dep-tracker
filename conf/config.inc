@@ -38,7 +38,8 @@ DT_ACTION_LIST="email"
 # Show help
 ###############
 usage() {
-  echo "Usage `basename $0` <options>" >&2
+  echo >&2
+  echo "Usage `basename $0` <options> [ [--] ...]" >&2
   echo >&2
   echo "Options:" >&2
   echo "  -r | --repo [reponame]" >&2
@@ -55,18 +56,27 @@ usage() {
 ###############
 while [[ "$#" -ge 1 ]]
 do
-  key="$1"
-  case $key in
+  case "$1" in
     -r | --repo )
         REPONAME="${2}"
-        shift
-    ;;
+        shift 2
+        ;;
     -p | --pkglist )
         PACKAGELIST_DIR="${2}"
+        shift 2
+        ;;
+    -- )
         shift
-    ;;
+        break
+        ;;
+    -* )
+        echo "Unknown option: $1" >&2
+        usage
+        ;;
+    * )
+        break
+        ;;
   esac
-  shift # past argument or value
 done
 
 #####

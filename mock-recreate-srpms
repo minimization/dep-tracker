@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-# Usage: $0 output-dir srpm-dir srpm-list-file [ version ]
+# Usage: $0 [ --repo reponame ] output-dir srpm-dir srpm-list-file
 #
 # Based upon mock_wrapper.sh, recreate_srpm.sh, and populate_srpm_repo.sh
 # from https://github.com/fedora-modularity/baseruntime-package-lists
@@ -9,17 +9,17 @@ errexit() {
     exit 5
 }
 
-if [ $# -lt 3 -o $# -gt 4 ]; then
-    errexit "Usage: $0 output-dir srpm-dir srpm-list-file [ version ]"
+WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source $WORK_DIR/conf/config.inc
+
+if [ $# -ne 3 ]; then
+    errexit "Usage: $0 [ --repo reponame ] output-dir srpm-dir srpm-list-file"
 fi
 
 output_dir="$1"
 srpm_dir="$2"
 srpm_list_file="$3"
-release_ver="${4:-rawhide}"
-
-WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-source $WORK_DIR/conf/config.inc
+release_ver="${REPONAME}"
 
 set -e
 
@@ -72,7 +72,7 @@ mdpolicy=group:primary
 best=1
 
 # repos
-$(cat ${REPO_DIR}/${release_ver}.repo)
+$(cat ${REPO_DIR}/${REPONAME}.repo)
 """
 EOF
 
