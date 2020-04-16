@@ -29,6 +29,8 @@ do
   echo "Downloading package lists for ${this_arch}"
   wget -q -O ${PACKAGELIST_DIR}/Packages.${this_arch} https://tiny.distro.builders/view-binary-package-name-list--eln-compose--${this_arch}.txt
   wget -q -O ${PACKAGELIST_DIR}/Sources.${this_arch} https://tiny.distro.builders/view-source-package-list--eln-compose--${this_arch}.txt
+	sort -u -o ${PACKAGELIST_DIR}/Packages.${this_arch} ${PACKAGELIST_DIR}/Packages.${this_arch}
+	sort -u -o ${PACKAGELIST_DIR}/Sources.${this_arch} ${PACKAGELIST_DIR}/Sources.${this_arch}
 done
 
 # Generate the initial buildroot
@@ -85,10 +87,10 @@ if ! [ -d ${GIT_DIR}/feedback-pipeline-config ] ; then
   git clone git@github.com:minimization/feedback-pipeline-config.git
 fi
 cd ${GIT_DIR}/feedback-pipeline-config
-git pullcp 
+git pull
 cp ${PACKAGELIST_DIR}/eln-buildroot-workload.yaml .
 git add eln-buildroot-workload.yaml
-git commit -m "Update eln-buildroot-workload $(date +%Y-%m-%d-%H:%M)"
+#git commit -m "Update eln-buildroot-workload $(date +%Y-%m-%d-%H:%M)"
 #git push
 
 exit 0
