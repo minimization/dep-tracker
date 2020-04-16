@@ -86,12 +86,19 @@ if ! [ -d ${GIT_DIR}/feedback-pipeline-config ] ; then
   cd ${GIT_DIR}
   git clone git@github.com:minimization/feedback-pipeline-config.git
 fi
+if ! [ -d ${GIT_DIR}/feedback-pipeline-config ] ; then
+	echo
+	echo "You do not seem to have correct credentials for the git repo"
+	echo "Exiting so you do no harm"
+	echo
+	exit 5
+fi
 cd ${GIT_DIR}/feedback-pipeline-config
 git pull
 cp ${PACKAGELIST_DIR}/eln-buildroot-workload.yaml .
 git add eln-buildroot-workload.yaml
-#git commit -m "Update eln-buildroot-workload $(date +%Y-%m-%d-%H:%M)"
-#git push
+git commit -m "Update eln-buildroot-workload $(date +%Y-%m-%d-%H:%M)"
+git push
 
 exit 0
 
