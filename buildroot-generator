@@ -16,7 +16,7 @@ TIMESTAMP=$(date +%Y-%m-%d-%H:%M)
 : ${VERBOSE:="FALSE"}
 : ${LAYERS:="TRUE"}
 # LIST VARIABLES
-ORIGINAL_LIST=()
+#ORIGINAL_LIST=()
 BINARY_LIST=()
 # ASSOCIATIVE ARRAY VARIABLES
 declare -A SOURCE_LIST
@@ -52,7 +52,8 @@ do
   BINARY_LIST=()
   SOURCE_LIST=()
   LAYER=1
-  PACKAGE_LIST="${PACKAGE_LIST_HEAD}.${this_arch}"
+  PACKAGE_LIST_FILE="${PACKAGE_LIST_HEAD}.${this_arch}"
+  SOURCE_LIST_FILE="${SOURCE_LIST_HEAD}.${this_arch}"
   DATA_DIR="${DATA_DIR_BASE}/${this_arch}"
   export DNF_OPTIONS=" --forcearch=${this_arch} ${DNF_OPTIONS_BASE}"
   if [ -d ${DATA_DIR}/${NEW_DIR} ] ; then
@@ -61,9 +62,11 @@ do
     mkdir -p ${DATA_DIR}/${NEW_DIR}
   fi
   echo "${TIMESTAMP}" > ${DATA_DIR}/${NEW_DIR}/${BR_TIMESTAMP_FILENAME}
-  cp ${PACKAGELIST_DIR}/${PACKAGE_LIST} ${DATA_DIR}/${NEW_DIR}/${PACKAGE_LIST}
-  # Load Original List
-  ORIGINAL_LIST="$(cat ${PACKAGELIST_DIR}/${PACKAGE_LIST})"
+  # cp ${PACKAGELIST_DIR}/${PACKAGE_LIST_FILE} ${DATA_DIR}/${NEW_DIR}/${PACKAGE_LIST_FILE}
+  # cp ${PACKAGELIST_DIR}/${SOURCE_LIST_FILE} ${DATA_DIR}/${NEW_DIR}/${SOURCE_LIST_FILE}
+  # We have to build them all for each arch, let's put them all in from the start
+  cp ${PACKAGELIST_DIR}/${PACKAGE_LIST_HEAD}.all-arches ${DATA_DIR}/${NEW_DIR}/${PACKAGE_LIST_FILE}
+  cp ${PACKAGELIST_DIR}/${SOURCE_LIST_HEAD}.all-arches ${DATA_DIR}/${NEW_DIR}/${SOURCE_LIST_FILE}
   
   #####
   # Work
@@ -71,14 +74,27 @@ do
   echo "  Creating BuildRoot for ${this_arch} ..."
   
   ## Find the sources for the original packages
-  if [ ${#ORIGINAL_LIST[@]} -le 0 ] ; then
-      echo "NO PACKAGES LISTED"
-      echo
-      exit 5
-  else
-    get_source_name "${ORIGINAL_LIST[@]} $(dnf ${DNF_OPTIONS} repoquery --qf %{name} --requires --resolve --recursive ${ORIGINAL_LIST[@]} 2>/dev/null)"
-  fi
+  # Load Original List
+  #ORIGINAL_LIST="$(cat ${PACKAGELIST_DIR}/${PACKAGE_LIST_FILE})"
+  #if [ ${#ORIGINAL_LIST[@]} -le 0 ] ; then
+  #    echo "NO PACKAGES LISTED"
+  #    echo
+  #    exit 5
+  #else
+  #  get_source_name "${ORIGINAL_LIST[@]} $(dnf ${DNF_OPTIONS} repoquery --qf %{name} --requires --resolve --recursive ${ORIGINAL_LIST[@]} 2>/dev/null)"
+  #fi
   
+  # Load Original Source List
+  for this_source in $(cat ${PACKAGELIST_DIR}/${SOURCE_LIST_HEAD}.all-arches)
+   do
+    if [[ ! " ${SOURCE_LIST[@]} " =~ " ${this_source} " ]]; then
+      if [ "${VERBOSE}" == "TRUE" ] ; then
+        echo "    ADDING SOURCE: ${this_source}"
+      fi
+      SOURCE_LIST[${this_source}]=1
+    fi
+   done
+
   # Loop through until we no longer add sources
   number_sources=${#SOURCE_LIST[@]}
   number_new_sources=${number_sources}
