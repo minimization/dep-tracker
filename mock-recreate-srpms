@@ -99,11 +99,26 @@ pushd ${scratch_dir}
 
 rpm2cpio ${srpm} | cpio -idm
 
+# find dist so we end up with the same names
+pkg_release=$(rpm -qp --nosignature --qf "%{release}" ${srpm})
+mkdir tmp
+rpmbuild -bs \
+         --build-in-place \
+         --define "dist BLAHBLAH" \
+         --define "_sourcedir ${scratch_dir}" \
+         --define "_srcrpmdir ${scratch_dir}/tmp" \
+         ${pkgname}.spec
+tmp_release=$(rpm -qp --nosignature --qf "%{release}" ${scratch_dir}/tmp/*src.rpm)
+release_prefix=$(echo ${tmp_release} | awk -F"BLAHBLAH" '{print $1}')
+release_suffix=$(echo ${tmp_release} | awk -F"BLAHBLAH" '{print $2}')
+this_dist=$(echo "${pkg_release}" | sed -e "s|^${release_prefix}||" -e "s|${release_suffix}$||")
+
 for arch in __ARCH_LIST__; do
     mkdir -p ${output_dir}/${arch}/sources
     rpmbuild -bs \
              --build-in-place \
              --target=${arch} \
+             --define "dist ${this_dist}" \
              --define "_sourcedir ${scratch_dir}" \
              --define "_srcrpmdir ${output_dir}/${arch}/sources" \
              ${pkgname}.spec
