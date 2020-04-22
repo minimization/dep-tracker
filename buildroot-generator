@@ -53,7 +53,9 @@ do
   SOURCE_LIST=()
   LAYER=1
   PACKAGE_LIST_FILE="${PACKAGE_LIST_HEAD}.${this_arch}"
+  PACKAGE_NVR_LIST_FILE="${PACKAGE_NVR_LIST_HEAD}.${this_arch}"
   SOURCE_LIST_FILE="${SOURCE_LIST_HEAD}.${this_arch}"
+  SOURCE_NVR_LIST_FILE="${SOURCE_NVR_LIST_HEAD}.${this_arch}"
   DATA_DIR="${DATA_DIR_BASE}/${this_arch}"
   export DNF_OPTIONS=" --forcearch=${this_arch} ${DNF_OPTIONS_BASE}"
   if [ -d ${DATA_DIR}/${NEW_DIR} ] ; then
@@ -66,7 +68,9 @@ do
   # cp ${PACKAGELIST_DIR}/${SOURCE_LIST_FILE} ${DATA_DIR}/${NEW_DIR}/${SOURCE_LIST_FILE}
   # We have to build them all for each arch, let's put them all in from the start
   cp ${PACKAGELIST_DIR}/${PACKAGE_LIST_HEAD}.all-arches ${DATA_DIR}/${NEW_DIR}/${PACKAGE_LIST_FILE}
+  cp ${PACKAGELIST_DIR}/${PACKAGE_NVR_LIST_HEAD}.all-arches ${DATA_DIR}/${NEW_DIR}/${PACKAGE_NVR_LIST_FILE}
   cp ${PACKAGELIST_DIR}/${SOURCE_LIST_HEAD}.all-arches ${DATA_DIR}/${NEW_DIR}/${SOURCE_LIST_FILE}
+  cp ${PACKAGELIST_DIR}/${SOURCE_NVR_LIST_HEAD}.all-arches ${DATA_DIR}/${NEW_DIR}/${SOURCE_NVR_LIST_FILE}
   
   #####
   # Work
