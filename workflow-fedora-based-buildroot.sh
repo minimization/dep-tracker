@@ -36,6 +36,7 @@ do
 	sort -u -o ${PACKAGELIST_DIR}/Package-NVRs.${this_arch} ${PACKAGELIST_DIR}/Package-NVRs.${this_arch}
 	# sort -u -o ${PACKAGELIST_DIR}/Source-NVRs.${this_arch} ${PACKAGELIST_DIR}/Source-NVRs.${this_arch}
 	# Take this out when we can
+	DNF_OPTIONS=" --forcearch=${this_arch} ${DNF_OPTIONS_BASE}"
 	dnf ${DNF_OPTIONS} repoquery --srpm --qf %{sourcerpm} $(cat ${PACKAGELIST_DIR}/Sources.${this_arch}) 2>/dev/null | sort -u -o ${PACKAGELIST_DIR}/Source-NVRs.${this_arch}
 	cat ${PACKAGELIST_DIR}/Packages.${this_arch} >> ${PACKAGELIST_DIR}/Packages.all-arches
 	cat ${PACKAGELIST_DIR}/Sources.${this_arch} >> ${PACKAGELIST_DIR}/Sources.all-arches
