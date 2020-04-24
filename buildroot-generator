@@ -121,8 +121,8 @@ do
   echo "Writting everything to disk"
   printf "%s\n" "${!SOURCE_LIST[@]}" | sort -u -o ${DATA_DIR}/${NEW_DIR}/${BR_SOURCE_PKGNAMES_FILENAME}
   printf "%s\n" "${BINARY_LIST[@]}" | sort -u -o ${DATA_DIR}/${NEW_DIR}/${BR_BINARY_PKGNAMES_FILENAME}
-  dnf ${DNF_OPTIONS} repoquery --srpm list ${!SOURCE_LIST[@]} 2>/dev/null | sort -u -o ${DATA_DIR}/${NEW_DIR}/${BR_SOURCE_NVRS_FILENAME}
-  dnf ${DNF_OPTIONS} repoquery list ${!BINARY_LIST[@]} | grep -v .src$ 2>/dev/null | sort -u -o ${DATA_DIR}/${NEW_DIR}/${BR_BINARY_NVRS_FILENAME}
+  dnf ${DNF_OPTIONS} repoquery --srpm --qf "%{name}-%{version}-%{release}.%{arch}" ${!SOURCE_LIST[@]} 2>/dev/null | sort -u -o ${DATA_DIR}/${NEW_DIR}/${BR_SOURCE_NVRS_FILENAME}
+  dnf ${DNF_OPTIONS} repoquery --qf "%{name}-%{version}-%{release}.%{arch}" ${BINARY_LIST[@]} | grep -v .src$ 2>/dev/null | sort -u -o ${DATA_DIR}/${NEW_DIR}/${BR_BINARY_NVRS_FILENAME}
 # finish with this arch
 done
 exit 0
