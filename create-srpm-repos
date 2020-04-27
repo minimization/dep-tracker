@@ -3,14 +3,7 @@
 
 WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source $WORK_DIR/conf/config.inc
-
-eecho() {
-    echo "$@" >&2
-}
-errexit() {
-    echo "$@" >&2
-    exit 5
-}
+source $WORK_DIR/utils.inc
 
 #####
 # Variables
@@ -135,19 +128,23 @@ populate_arch_source_rpm_repo() {
 
 # clean_source_rpm_repo repo_dir pkg1 pkg2 ...
 # repo_dir: arch-specific directory for repos
-# pkg1 ...: list of base source package names to add to repo
+# pkg1 ...: list of base source package names that belong in repo
 clean_source_rpm_repo() {
   local repo_dir="$1"
   local -a pkg_list=("${@:2}")
 
   local -A pkg_assoc_list
-  local srpm srpm_in_repo
   local -A repo_srpm_map
+  local -a ordered_srpms
+  local this_package
+  local srpm srpm_in_repo
+  local expected_srpm expected_srpm_in_repo
   local pkgname
 
   echo "Cleaning source package repo"
 
-  # make an associate array from pkg_list for quick lookup
+  # for quick lookup, make an associate array from list of packages that
+  # belong in the source RPM repo
   for this_package in "${pkg_list[@]}"
   do
     pkg_assoc_list[${this_package}]=1
@@ -163,26 +160,54 @@ clean_source_rpm_repo() {
       pkgname=${SRPM_REV_MAPPING[${srpm}]}
     else
       # SRPM name doesn't match the known set, see what package in contains
-      pkgname=$(rpm -q --nosignature --qf "%{name}" -p ${srpm_in_repo})
+      pkgname=$(pkgname_from_srpm_file ${srpm_in_repo})
     fi
 
     repo_srpm_map[${srpm}]=${pkgname}
   done
 
+  # loop through the cached list of all SRPMs currently in the source repo
+  # directory
   for srpm in ${!repo_srpm_map[@]}
   do
-    srpm_in_repo="${repo_dir}/sources/${srpm}"
     pkgname=${repo_srpm_map[${srpm}]}
+    srpm_in_repo="${repo_dir}/sources/${srpm}"
 
-    # clean up outdated packages, and those not wanted for this arch
+    if [ ! -r "${srpm_in_repo}" ]; then
+      # the SRPM for this package has been removed or replaced
+      continue
+    fi
+
+    # clean up packages not wanted for this arch
     if [ ! -v pkg_assoc_list[${pkgname}] ]; then
        echo "NOTICE: Package ${pkgname} does not belong in the repo for this arch, removing"
        rm -f "${srpm_in_repo}"
        continue
     fi
 
-    if [ "${srpm}" !=  "${SRPM_MAPPING[${pkgname}]}" ]; then
-      echo "NOTICE: Found ${srpm} instead of expected ${SRPM_MAPPING[${pkgname}]}"
+    # see if the SRPM we have is different than originally expected
+    expected_srpm="${SRPM_MAPPING[${pkgname}]}"
+    if [ "${srpm}" !=  "${expected_srpm}" ]; then
+      echo "NOTICE: Found ${srpm} instead of expected ${expected_srpm}"
+      expected_srpm_in_repo="${repo_dir}/sources/${expected_srpm}"
+      if [ ! -r "${expected_srpm_in_repo}" ]; then
+        # the originally expected SRPM for this package has already been
+        # replaced
+        continue
+      fi
+
+      # set ordered_srpms[0] to older SRPM, ordered_srpms[1] to newer
+      ordered_srpms=($(order_srpm_files "${srpm_in_repo}" "${expected_srpm_in_repo}"))
+      if [ ${#ordered_srpms[@]} -ne 2 ]; then
+        echo "WARNING: Unable to determine older SRPM for package ${pkgname}!"
+        continue
+      fi
+      echo "  Removing older SRPM: ${ordered_srpms[0]##*/}"
+      echo "  Keeping newer SRPM : ${ordered_srpms[1]##*/}"
+      # keep track of newer SRPM
+      SRPM_MAPPING[${pkgname}]="${ordered_srpms[1]##*/}"
+      # remove older SRPM
+      rm -f "${ordered_srpms[0]}"
     fi
   done
 }

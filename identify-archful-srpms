@@ -2,11 +2,7 @@
 
 WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source $WORK_DIR/conf/config.inc
-
-errexit() {
-    echo "$@" >&2
-    exit 5
-}
+source $WORK_DIR/utils.inc
 
 #####
 # Variables
@@ -83,38 +79,12 @@ download_source_rpms() {
   local src_dl_arch=${ARCH_LIST[0]}
 
   echo "Downloading SRPMs."
-  dnf --quiet --forcearch=${src_dl_arch} ${DNF_OPTIONS_SOURCE_ONLY} download --downloaddir "${srpm_dir}" --source "${pkg_list[@]}"
+  local DNF_OPTIONS="--quiet --forcearch=${src_dl_arch} ${DNF_OPTIONS_SOURCE_ONLY}"
+  # add --skip-broken because source repo isn't always up to date with binary repos
+  DNF_OPTIONS="--skip-broken ${DNF_OPTIONS}"
+  dnf ${DNF_OPTIONS} download --downloaddir "${srpm_dir}" --source "${pkg_list[@]}"
 }
 
-# order_srpm_files srpm1 srpm2
-# srpm1: a source rpm file path
-# srpm2: another source rpm file path
-#
-# return older file first based on NVR, newer second
-order_srpm_files() {
-  local srpm1="$1" srpm2="$2"
-  local evr1 evr2
-
-  evr1=$(rpm -q --nosignature --qf "%{evr}" -p ${srpm1})
-  evr2=$(rpm -q --nosignature --qf "%{evr}" -p ${srpm2})
-
-  rpmdev-vercmp "$evr1" "$evr2" >/dev/null
-  cmpstat="$?"
-  case "$cmpstat" in
-  0)  # EVRs are equal
-    echo "$srpm1" "$srpm2"
-    ;;
-  11) # EVR1 is newer
-    echo "$srpm2" "$srpm1"
-    ;;
-  12) # EVR2 is newer
-    echo "$srpm1" "$srpm2"
-    ;;
-  *)  # problems
-    echo "Unable to compare $srpm1 and $srpm2!" >&2
-    ;;
-  esac
-}
 
 # check_source_rpms srpm_dir
 # srpm_dir: directory into which source rpms should be downloaded
@@ -138,7 +108,7 @@ check_source_rpms() {
   SRPM_DOWNLOADED_LIST=()
   for srpm in ${srpm_dir}/*.src.rpm
   do
-    pkgname=$(rpm -q --nosignature --qf "%{name}" -p ${srpm})
+    pkgname=$(pkgname_from_srpm_file ${srpm})
 
     if [ ! -v MERGED_SOURCE_LIST[${pkgname}] ]; then
       echo "NOTICE: Found extraneous SRPM for package ${pkgname}! Removing."
@@ -149,13 +119,15 @@ check_source_rpms() {
     if [ ! -v SRPM_DOWNLOADED_LIST[${pkgname}] ]; then
       SRPM_DOWNLOADED_LIST[${pkgname}]="${srpm}"
     else
-      echo "NOTICE: Found multiple SRPMs for package ${pkgname}. Removing older."
+      echo "NOTICE: Found multiple SRPMs for package ${pkgname}."
       # set ordered_srpms[0] to older SRPM, ordered_srpms[1] to newer
       ordered_srpms=($(order_srpm_files "${srpm}" "${SRPM_DOWNLOADED_LIST[${pkgname}]}"))
       if [ ${#ordered_srpms[@]} -ne 2 ]; then
         echo "WARNING: Unable to determine older SRPM for package ${pkgname}!"
         continue
       fi
+      echo "  Removing older SRPM: ${ordered_srpms[0]##*/}"
+      echo "  Keeping newer SRPM : ${ordered_srpms[1]##*/}"
       # keep newer SRPM
       SRPM_DOWNLOADED_LIST[${pkgname}]="${ordered_srpms[1]}"
       # remove old SRPM and any previously extracted spec file
