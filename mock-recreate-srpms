@@ -4,13 +4,9 @@
 # Based upon mock_wrapper.sh, recreate_srpm.sh, and populate_srpm_repo.sh
 # from https://github.com/fedora-modularity/baseruntime-package-lists
 
-errexit() {
-    echo "$@" >&2
-    exit 5
-}
-
 WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source $WORK_DIR/conf/config.inc
+source $WORK_DIR/utils.inc
 
 if [ $# -ne 3 ]; then
     errexit "Usage: $0 [ --repo reponame ] output-dir srpm-dir srpm-list-file"
@@ -112,7 +108,7 @@ tmp_release=$(rpm -qp --nosignature --qf "%{release}" ${scratch_dir}/tmp/*src.rp
 release_prefix=$(echo ${tmp_release} | awk -F"BLAHBLAH" '{print $1}')
 release_suffix=$(echo ${tmp_release} | awk -F"BLAHBLAH" '{print $2}')
 this_dist=$(echo "${pkg_release}" | sed -e "s|^${release_prefix}||" -e "s|${release_suffix}$||")
-
+echo "Building SRPM for package ${pkgname} using %{dist}=${this_dist}"
 for arch in __ARCH_LIST__; do
     mkdir -p ${output_dir}/${arch}/sources
     rpmbuild -bs \
