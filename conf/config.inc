@@ -19,7 +19,6 @@ ARCH_LIST=(aarch64 ppc64le s390x x86_64)
 CONF_DIR="${WORK_DIR}/conf"
 REPO_DIR="${WORK_DIR}/repos"
 GIT_DIR="${WORK_DIR}/git"
-DATA_DIR_BASE="${WORK_DIR}/data"
 PACKAGELIST_DIR="${CONF_DIR}"
 PACKAGE_DIR_BASE="${WORK_DIR}/packages"
 # FILES/VARIABLES
@@ -89,6 +88,12 @@ done
 # Variables
 #   That might change with command line options
 #####
+if echo ${REPONAME} | grep -q archful-source ; then
+  REPO_BASE=$(echo ${REPONAME} | cut -d'-' -f1)
+else
+  REPO_BASE=${REPONAME}
+fi
+DATA_DIR_BASE="${WORK_DIR}/data-${REPO_BASE}"
 DNF_OPTIONS_BASE="-c ${REPO_DIR}/${REPONAME}.repo --disablerepo=* --enablerepo=dt-main --enablerepo=dt-main-source -y"
 DNF_OPTIONS_SOURCE_ONLY="-c ${REPO_DIR}/${REPONAME}.repo --disablerepo=* --enablerepo=dt-main-source"
 DNF_OPTIONS_BINARY_ONLY="-c ${REPO_DIR}/${REPONAME}.repo --disablerepo=* --enablerepo=dt-main"
