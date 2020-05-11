@@ -1,0 +1,146 @@
+#!/bin/bash
+# Given a source rpm NVR, gather all the package information
+#  for all the arches.
+#
+
+errexit() {
+    echo "$@" >&2
+    exit 5
+}
+
+WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source $WORK_DIR/conf/config.inc
+
+if [ $# -ne 1 ]; then
+    errexit "Usage: $0 [ --repo reponame ] sourcerpm"
+fi
+
+input_source_rpm="$1"
+# We do not care what form the source rpm is incoming, but we want it to be just NVR
+this_source_nvr=$(echo ${input_source_rpm} | sed "s/.rpm$//" | sed "s/.src$//")
+
+
+echo "  $0 ${this_source_nvr}"
+
+# Get information from koji
+scratch_dir=$(mktemp -d)
+pushd ${scratch_dir} >/dev/null
+
+koji buildinfo ${this_source_nvr} > buildinfo
+this_source_name="$(grep ^Task: buildinfo | cut -d'/' -f3 | cut -d':' -f1 | sed 's/.git$//')"
+
+# Assume we are refreshing data, if there already was some
+PACKAGE_DIR="${PACKAGE_DIR_BASE}/${this_source_name}/${this_source_nvr}"
+PACKAGE_LATEST="${PACKAGE_DIR_BASE}/${this_source_name}/${REPONAME}-latest"
+mkdir -p ${PACKAGE_DIR}
+echo "    ${this_source_nvr} ${PACKAGE_DIR} "
+if [ "${PACKAGE_DIR}" != "" ] ; then
+  rm -rf ${PACKAGE_DIR}/*
+fi
+
+# Do Stuff with buildinfo
+echo "    ${this_source_nvr} buildinfo "
+cp buildinfo ${PACKAGE_DIR}/buildinfo.txt
+cat buildinfo | grep .rpm$ | grep -v -e debuginfo -e debugsource |awk -F '/' '{print $NF}' | sed 's/.rpm$//' | sort -u -o ${PACKAGE_DIR}/nvr-list.txt
+if ! [ -s ${PACKAGE_DIR}/nvr-list.txt ] ; then
+ cat buildinfo | grep Signatures: | grep -v -e debuginfo -e debugsource |awk -F '/' '{print $NF}' | sed 's/.rpm.*//' | sort -u -o ${PACKAGE_DIR}/nvr-list.txt
+fi
+grep ^Task: buildinfo | awk '{print $2}' > ${PACKAGE_DIR}/task-number.txt
+
+# Work through everything one arch at a time
+echo "    ${this_source_nvr} dependencies "
+for this_arch in noarch ${ARCH_LIST[@]}
+do
+  mkdir -p ${PACKAGE_DIR}/${this_arch}
+  if [ "${this_arch}" == "noarch" ] ; then
+    base_arch="x86_64"
+  else
+    base_arch="${this_arch}"
+  fi
+  DNF_OPTIONS=" --forcearch=${base_arch} -c ${REPO_DIR}/${REPONAME}.${this_arch}.repo ${DNF_OPTIONS_NOCONF_BASE}"
+  # Work on source
+  if ! [ "${this_arch}" == "noarch" ] ; then
+    echo "      ${this_source_nvr} source ${this_arch}"
+    dnf ${DNF_OPTIONS} repoquery --qf %{name} --requires --resolve ${this_source_name} 2>/dev/null | sort -u -o ${PACKAGE_DIR}/${this_arch}/sourcedeps.txt
+  fi
+  # Work on binaries
+  grep -e ${this_arch} ${PACKAGE_DIR}/nvr-list.txt | sort -u -o ${PACKAGE_DIR}/${this_arch}/binary-nvr-list.txt
+  cat ${PACKAGE_DIR}/${this_arch}/binary-nvr-list.txt | while read this_nvr
+  do
+    echo "        ${this_source_nvr} ${this_nvr}"
+    this_name=$(dnf ${DNF_OPTIONS} repoquery --qf %{name} ${this_nvr} 2>/dev/null)
+    echo "${this_name}" >> ${PACKAGE_DIR}/${this_arch}/binary-name-list.txt
+    dnf ${DNF_OPTIONS} repoquery --requires --resolve --qf %{name} ${this_nvr} 2>/dev/null | sort -u -o ${PACKAGE_DIR}/${this_arch}/${this_name}-deps.txt
+  done
+done
+
+## Work on everything all together
+echo "    ${this_source_nvr} all together "
+# Binaries all together
+cat ${PACKAGE_DIR}/*/*-deps.txt |sort -u -o ${PACKAGE_DIR}/binary-deps.txt
+cat ${PACKAGE_DIR}/*/binary-name-list.txt |sort -u -o ${PACKAGE_DIR}/binary-name-list.txt
+cat ${PACKAGE_DIR}/binary-name-list.txt | while read this_binary
+do
+  cat ${PACKAGE_DIR}/*/${this_binary}-deps.txt | sort -u -o ${PACKAGE_DIR}/${this_binary}-deps.txt
+  this_number=$(ls -1 ${PACKAGE_DIR}/*/${this_binary}-deps.txt | wc -l)
+  if [ ${this_number} -eq 1 ] ;then
+    cp ${PACKAGE_DIR}/${this_binary}-deps.txt ${PACKAGE_DIR}/${this_binary}-common-deps.txt
+  else
+    cat ${PACKAGE_DIR}/*/${this_binary}-deps.txt | sort | uniq -cd | sed -n -e "s/^ *${this_number} \(.*\)/\1/p" | sort -u -o ${PACKAGE_DIR}/${this_binary}-common-deps.txt
+    for this_arch in noarch ${ARCH_LIST[@]}
+    do
+      if [ -s ${PACKAGE_DIR}/${this_arch}/${this_binary}-deps.txt ] ; then
+        comm -13 ${PACKAGE_DIR}/${this_binary}-common-deps.txt ${PACKAGE_DIR}/${this_arch}/${this_binary}-deps.txt >> ${PACKAGE_DIR}/${this_arch}/${this_binary}-deps-arch-extra.txt
+        if ! [ -s ${PACKAGE_DIR}/${this_arch}/${this_binary}-deps-arch-extra.txt ] ; then
+          rm -f ${PACKAGE_DIR}/${this_arch}/${this_binary}-deps-arch-extra.txt
+        fi
+      fi
+    done
+  fi
+done
+# Source all together
+cat ${PACKAGE_DIR}/*/sourcedeps.txt |sort -u -o ${PACKAGE_DIR}/source-deps.txt
+cat ${PACKAGE_DIR}/*/sourcedeps.txt | sort | uniq -cd | sed -n -e 's/^ *4 \(.*\)/\1/p' | sort -u -o ${PACKAGE_DIR}/source-common-deps.txt
+if ! diff -q ${PACKAGE_DIR}/source-deps.txt ${PACKAGE_DIR}/source-common-deps.txt > /dev/null ; then
+  for this_arch in ${ARCH_LIST[@]}
+  do
+        comm -13 ${PACKAGE_DIR}/source-common-deps.txt ${PACKAGE_DIR}/${this_arch}/sourcedeps.txt >> ${PACKAGE_DIR}/${this_arch}/sourcedeps-arch-extra.txt
+        if ! [ -s ${PACKAGE_DIR}/${this_arch}/sourcedeps-arch-extra.txt ] ; then
+          rm -f ${PACKAGE_DIR}/${this_arch}/sourcedeps-arch-extra.txt
+        fi
+  done
+fi
+
+#Check for changes
+echo "    ${this_source_nvr} check for changes "
+if [[ -L "${PACKAGE_LATEST}" && -d "${PACKAGE_LATEST}" ]] ; then
+  realpath -e --relative-base=${PACKAGE_DIR_BASE}/${this_source_name} ${PACKAGE_LATEST} > ${PACKAGE_DIR}/changes-nvr.txt
+  if ! diff -q ${PACKAGE_DIR}/source-deps.txt ${PACKAGE_LATEST}/source-deps.txt > /dev/null ; then
+    diff -u0 ${PACKAGE_LATEST}/source-deps.txt ${PACKAGE_DIR}/source-deps.txt | grep -v -e @@ -e source-deps.txt >> ${PACKAGE_DIR}/changes-source-deps.txt
+  else
+    touch ${PACKAGE_DIR}/changes-source-deps.txt
+  fi
+  if ! diff -q ${PACKAGE_DIR}/binary-deps.txt ${PACKAGE_LATEST}/binary-deps.txt > /dev/null ; then
+    diff -u0 ${PACKAGE_LATEST}/binary-deps.txt ${PACKAGE_DIR}/binary-deps.txt | grep -v -e @@ -e binary-deps.txt >> ${PACKAGE_DIR}/changes-binary-deps.txt
+  else
+    touch ${PACKAGE_DIR}/changes-binary-deps.txt
+  fi
+  if [ -s ${PACKAGE_DIR}/changes-source-deps.txt ] || [ -s ${PACKAGE_DIR}/changes-binary-deps.txt ] ; then
+    echo ${this_source_nvr} >> ${PACKAGE_DIR}/changes-last-time-deps-changed.txt
+  else
+    cp ${PACKAGE_LATEST}/changes-last-time-deps-changed.txt ${PACKAGE_DIR}/changes-last-time-deps-changed.txt
+  fi
+  rm -f ${PACKAGE_LATEST}
+else
+  echo ${this_source_nvr} >> ${PACKAGE_DIR}/changes-nvr.txt
+  echo ${this_source_nvr} >> ${PACKAGE_DIR}/changes-last-time-deps-changed.txt
+  touch ${PACKAGE_DIR}/changes-source-deps.txt ${PACKAGE_DIR}/changes-binary-deps.txt
+fi
+ln -s ${PACKAGE_DIR} ${PACKAGE_LATEST}
+
+# End and clean up
+echo "    ${this_source_nvr} finished "
+popd  >/dev/null # ${scratch_dir}
+rm -rf ${scratch_dir}
+
+exit 0
