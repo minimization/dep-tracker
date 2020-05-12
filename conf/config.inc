@@ -90,10 +90,6 @@ done
 #####
 if echo ${REPONAME} | grep -q archful-source ; then
   REPO_BASE=$(echo ${REPONAME} | cut -d'-' -f1)
-  if ! [ -s ${REPO_DIR}/${REPONAME}.repo ] ; then
-    cp ${REPO_DIR}/${REPONAME}.repo.template ${REPO_DIR}/${REPONAME}.repo
-    sed -i "s|BASE-DIR|${WORK_DIR}/data-${REPO_BASE}|" ${REPO_DIR}/${REPONAME}.repo
-  fi
 else
   REPO_BASE=${REPONAME}
 fi
@@ -105,7 +101,7 @@ do
     cp ${REPO_DIR}/${REPONAME}.repo.localcache.template ${REPO_DIR}/${REPONAME}.${this_arch}.repo
     sed -i "s|CACHE-DIR|${CACHE_DIR}/${REPONAME}-${this_arch}|" ${REPO_DIR}/${REPONAME}.${this_arch}.repo
     if echo ${REPONAME} | grep -q archful-source ; then
-      sed -i "s|BASE-DIR|${WORK_DIR}|" ${REPO_DIR}/${REPONAME}.${this_arch}.repo
+      sed -i "s|BASE-DIR|${WORK_DIR}/data-${REPO_BASE}|" ${REPO_DIR}/${REPONAME}.${this_arch}.repo
     fi
   fi
 done
