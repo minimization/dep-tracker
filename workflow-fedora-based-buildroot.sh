@@ -56,9 +56,6 @@ sort -u -o ${PACKAGELIST_DIR}/Source-NVRs.all-arches ${PACKAGELIST_DIR}/Source-N
 #   Not written yet, cuz it's optional
 
 # Generate the final buildroot using the archful source repos
-rm -f ${REPO_DIR}/rawhide-archful-source.repo
-cp ${REPO_DIR}/rawhide-archful-source.repo.template ${REPO_DIR}/rawhide-archful-source.repo
-sed -i "s|BASE-DIR|${WORK_DIR}|" ${REPO_DIR}/rawhide-archful-source.repo
 ./buildroot-generator -r rawhide-archful-source -p ${PACKAGELIST_DIR}
 
 
@@ -105,7 +102,7 @@ if ! [ -d ${GIT_DIR}/feedback-pipeline-config ] ; then
 	echo
 	exit 5
 fi
-cd ${GIT_DIR}/feedback-pipeline-config
+cd ${GIT_DIR}/feedback-pipeline-config/configs
 git pull
 cp ${PACKAGELIST_DIR}/eln-buildroot-workload.yaml .
 git add eln-buildroot-workload.yaml
