@@ -9,7 +9,7 @@ gpgcheck=0
 
 [dt-main-source]
 name=Fedora Rawhide - Source
-baseurl=file://BASE-DIR/data/repos/new/$basearch/
+baseurl=file://BASE-DIR/repos/new/$basearch/
 enabled=1
 gpgcheck=0
 
