@@ -3,21 +3,18 @@ exclude=generic-release* fedora-release-x* fedora-release-w* fedora-release-s* f
 
 [dt-main]
 name=Fedora Rawhide
-#baseurl=http://download.fedoraproject.org/pub/fedora/linux/development/rawhide/$basearch/os/
 metalink=https://mirrors.fedoraproject.org/metalink?repo=rawhide&arch=$basearch
 enabled=1
 gpgcheck=0
 
 [dt-main-source]
 name=Fedora Rawhide - Source
-#baseurl=http://download.fedoraproject.org/pub/fedora/linux/development/rawhide/source/SRPMS/
 metalink=https://mirrors.fedoraproject.org/metalink?repo=rawhide-source&arch=$basearch
 enabled=1
 gpgcheck=0
 
 [dt-modular]
 name=Fedora Modular 
-#baseurl=http://download.example/pub/fedora/linux/releases/$releasever/Modular/$basearch/os/
 metalink=https://mirrors.fedoraproject.org/metalink?repo=fedora-modular-$releasever&arch=$basearch
 enabled=0
 gpgcheck=0
@@ -25,7 +22,6 @@ gpgcheck=0
 
 [dt-modular-source]
 name=Fedora Modular - Source
-#baseurl=http://download.example/pub/fedora/linux/releases/$releasever/Modular/source/tree/
 metalink=https://mirrors.fedoraproject.org/metalink?repo=fedora-modular-source-$releasever&arch=$basearch
 enabled=0
 gpgcheck=0
