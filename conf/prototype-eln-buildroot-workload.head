@@ -1,0 +1,12 @@
+---
+document:  feedback-pipeline-workload
+version: 1
+data:
+    name: Rawhide-based ELN Prototype Buildroot Workload
+    description: This is a prototype buildroot resolved against Rawhide repositories to help us figure out what to rebuild in ELN. You probably want to see the eln-buildroot-workload.
+    maintainer: tdawson
+    labels:
+        - prototype-eln-buildroot
+    repositories:
+        - repository-fedora-rawhide
+    packages:
