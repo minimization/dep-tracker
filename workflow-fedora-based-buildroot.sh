@@ -36,10 +36,11 @@ rm -f ${PACKAGELIST_DIR}/*
 for this_arch in ${ARCH_LIST[@]}
 do
   echo "Downloading package lists for ${this_arch}"
-  wget -q -O ${PACKAGELIST_DIR}/Packages.${this_arch} ${URL_BASE}view-binary-package-name-list--${VIEW}-compose--${this_arch}.txt
-  wget -q -O ${PACKAGELIST_DIR}/Sources.${this_arch} ${URL_BASE}view-source-package-name-list--${VIEW}-compose--${this_arch}.txt
-  wget -q -O ${PACKAGELIST_DIR}/Package-NVRs.${this_arch} ${URL_BASE}view-binary-package-list--${VIEW}-compose--${this_arch}.txt
-  wget -q -O ${PACKAGELIST_DIR}/Source-NVRs.${this_arch} ${URL_BASE}view-source-package-list--${VIEW}-compose--${this_arch}.txt
+  echo "${URL_BASE}view-binary-package-name-list--${VIEW}-compose--${this_arch}.txt"
+  wget -q -O ${PACKAGELIST_DIR}/Packages.${this_arch} ${URL_BASE}view-binary-package-name-list--view-${VIEW}--${this_arch}.txt
+  wget -q -O ${PACKAGELIST_DIR}/Sources.${this_arch} ${URL_BASE}view-source-package-name-list--view-${VIEW}--${this_arch}.txt
+  wget -q -O ${PACKAGELIST_DIR}/Package-NVRs.${this_arch} ${URL_BASE}view-binary-package-list--view-${VIEW}--${this_arch}.txt
+  wget -q -O ${PACKAGELIST_DIR}/Source-NVRs.${this_arch} ${URL_BASE}view-source-package-list--view-${VIEW}--${this_arch}.txt
 	sort -u -o ${PACKAGELIST_DIR}/Packages.${this_arch} ${PACKAGELIST_DIR}/Packages.${this_arch}
 	sort -u -o ${PACKAGELIST_DIR}/Sources.${this_arch} ${PACKAGELIST_DIR}/Sources.${this_arch}
 	sort -u -o ${PACKAGELIST_DIR}/Package-NVRs.${this_arch} ${PACKAGELIST_DIR}/Package-NVRs.${this_arch}
