@@ -16,9 +16,18 @@
 WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source ${WORK_DIR}/conf/config.inc
 
-PACKAGELIST_DIR="${WORK_DIR}/packagelists"
 BAD_PACKAGES=(nodejs-find-up nodejs-grunt-contrib-uglify nodejs-http-errors nodejs-json-diff nodejs-load-grunt-tasks nodejs-locate-path nodejs-pkg-up nodejs-p-locate nodejs-raw-body)
-
+PACKAGELIST_DIR="${WORK_DIR}/packagelists-${REPO_BASE}"
+URL_BASE="https://tiny.distro.builders/"
+if [ "${REPO_BASE}" == "rawhide" ] ; then
+  VIEW="prototype-eln"
+elif [ "${REPO_BASE}" == "eln" ] ; then
+  VIEW="eln"
+else
+  echo "View not setup for ${REPO_BASE}"
+  echo "  Exiting."
+  exit 6
+fi
 ## Create buildroot from feedback-pipeline packages
 
 # Get package lists from feedback-pipeline
@@ -27,10 +36,10 @@ rm -f ${PACKAGELIST_DIR}/*
 for this_arch in ${ARCH_LIST[@]}
 do
   echo "Downloading package lists for ${this_arch}"
-  wget -q -O ${PACKAGELIST_DIR}/Packages.${this_arch} https://tiny.distro.builders/view-binary-package-name-list--eln-compose--${this_arch}.txt
-  wget -q -O ${PACKAGELIST_DIR}/Sources.${this_arch} https://tiny.distro.builders/view-source-package-name-list--eln-compose--${this_arch}.txt
-  wget -q -O ${PACKAGELIST_DIR}/Package-NVRs.${this_arch} https://tiny.distro.builders/view-binary-package-list--eln-compose--${this_arch}.txt
-  wget -q -O ${PACKAGELIST_DIR}/Source-NVRs.${this_arch} https://tiny.distro.builders/view-source-package-list--eln-compose--${this_arch}.txt
+  wget -q -O ${PACKAGELIST_DIR}/Packages.${this_arch} ${URL_BASE}view-binary-package-name-list--${VIEW}-compose--${this_arch}.txt
+  wget -q -O ${PACKAGELIST_DIR}/Sources.${this_arch} ${URL_BASE}view-source-package-name-list--${VIEW}-compose--${this_arch}.txt
+  wget -q -O ${PACKAGELIST_DIR}/Package-NVRs.${this_arch} ${URL_BASE}view-binary-package-list--${VIEW}-compose--${this_arch}.txt
+  wget -q -O ${PACKAGELIST_DIR}/Source-NVRs.${this_arch} ${URL_BASE}view-source-package-list--${VIEW}-compose--${this_arch}.txt
 	sort -u -o ${PACKAGELIST_DIR}/Packages.${this_arch} ${PACKAGELIST_DIR}/Packages.${this_arch}
 	sort -u -o ${PACKAGELIST_DIR}/Sources.${this_arch} ${PACKAGELIST_DIR}/Sources.${this_arch}
 	sort -u -o ${PACKAGELIST_DIR}/Package-NVRs.${this_arch} ${PACKAGELIST_DIR}/Package-NVRs.${this_arch}
@@ -72,21 +81,21 @@ done
 cat ${PACKAGELIST_DIR}/Packages.added.tmp | sort | uniq -cd | sed -n -e 's/^ *4 \(.*\)/\1/p' | sort -u -o ${PACKAGELIST_DIR}/Packages.added.common
 
 # Generate the buildroot workload
-rm -f ${PACKAGELIST_DIR}/eln-buildroot-workload.yaml
-cat ${WORK_DIR}/conf/eln-buildroot-workload.head >> ${PACKAGELIST_DIR}/eln-buildroot-workload.yaml
-cat ${PACKAGELIST_DIR}/Packages.added.common | awk '{print "        - " $1}' >> ${PACKAGELIST_DIR}/eln-buildroot-workload.yaml
-echo "    arch_packages:" >> ${PACKAGELIST_DIR}/eln-buildroot-workload.yaml
+rm -f ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
+cat ${WORK_DIR}/conf/${VIEW}-buildroot-workload.head >> ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
+cat ${PACKAGELIST_DIR}/Packages.added.common | awk '{print "        - " $1}' >> ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
+echo "    arch_packages:" >> ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
 for this_arch in ${ARCH_LIST[@]}
 do
   DATA_DIR="${DATA_DIR_BASE}/${this_arch}"
-  echo "        ${this_arch}:" >> ${PACKAGELIST_DIR}/eln-buildroot-workload.yaml
-  comm -13 ${PACKAGELIST_DIR}/Packages.added.common ${DATA_DIR}/${NEW_DIR}/added-binary-package-names.txt | awk '{print "            - " $1}' >> ${PACKAGELIST_DIR}/eln-buildroot-workload.yaml
+  echo "        ${this_arch}:" >> ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
+  comm -13 ${PACKAGELIST_DIR}/Packages.added.common ${DATA_DIR}/${NEW_DIR}/added-binary-package-names.txt | awk '{print "            - " $1}' >> ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
 done
 
 # Trim buildroot workload of packages we don't want in there
 for pkgname in ${BAD_PACKAGES[@]}
 do
-  sed -i "/ ${pkgname}$/d" ${PACKAGELIST_DIR}/eln-buildroot-workload.yaml
+  sed -i "/ ${pkgname}$/d" ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
 done
 
 # Upload to feedback-pipeline
@@ -104,9 +113,9 @@ if ! [ -d ${GIT_DIR}/feedback-pipeline-config ] ; then
 fi
 cd ${GIT_DIR}/feedback-pipeline-config/configs
 git pull
-cp ${PACKAGELIST_DIR}/eln-buildroot-workload.yaml .
-git add eln-buildroot-workload.yaml
-git commit -m "Update eln-buildroot-workload $(date +%Y-%m-%d-%H:%M)"
+cp ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml .
+git add ${VIEW}-buildroot-workload.yaml
+git commit -m "Update ${VIEW}-buildroot-workload $(date +%Y-%m-%d-%H:%M)"
 git push
 
 exit 0
