@@ -7,7 +7,6 @@
 #   Summary, start with a list of packages from feedback-pipeline
 #     Return, as a workload, a list of packages that constitue
 #     a build root for that initial set of packages.
-#   This is working off the Fedora-rawhide repo.
 #
 
 #####
@@ -36,7 +35,6 @@ rm -f ${PACKAGELIST_DIR}/*
 for this_arch in ${ARCH_LIST[@]}
 do
   echo "Downloading package lists for ${this_arch}"
-  echo "${URL_BASE}view-binary-package-name-list--${VIEW}-compose--${this_arch}.txt"
   wget -q -O ${PACKAGELIST_DIR}/Packages.${this_arch} ${URL_BASE}view-binary-package-name-list--view-${VIEW}--${this_arch}.txt
   wget -q -O ${PACKAGELIST_DIR}/Sources.${this_arch} ${URL_BASE}view-source-package-name-list--view-${VIEW}--${this_arch}.txt
   wget -q -O ${PACKAGELIST_DIR}/Package-NVRs.${this_arch} ${URL_BASE}view-binary-package-list--view-${VIEW}--${this_arch}.txt
@@ -56,17 +54,17 @@ sort -u -o ${PACKAGELIST_DIR}/Package-NVRs.all-arches ${PACKAGELIST_DIR}/Package
 sort -u -o ${PACKAGELIST_DIR}/Source-NVRs.all-arches ${PACKAGELIST_DIR}/Source-NVRs.all-arches
 
 # Generate the initial buildroot
-./buildroot-generator -r rawhide -p ${PACKAGELIST_DIR}
+./buildroot-generator -r ${REPO_BASE} -p ${PACKAGELIST_DIR}
 
 # Take the initial buildroot and create archful source repos
-./identify-archful-srpms
-./create-srpm-repos
+./identify-archful-srpms -r ${REPO_BASE}
+./create-srpm-repos -r ${REPO_BASE}
 
 # (Optional) Save off initial buildroot lists
 #   Not written yet, cuz it's optional
 
 # Generate the final buildroot using the archful source repos
-./buildroot-generator -r rawhide-archful-source -p ${PACKAGELIST_DIR}
+./buildroot-generator -r ${REPO_BASE}-archful-source -p ${PACKAGELIST_DIR}
 
 
 ## Create buildroot workload and upload it to feedback-pipeline
