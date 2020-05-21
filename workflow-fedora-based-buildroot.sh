@@ -71,12 +71,15 @@ sort -u -o ${PACKAGELIST_DIR}/Source-NVRs.all-arches ${PACKAGELIST_DIR}/Source-N
 
 # Determine binary packages added, and which are arch specific
 rm -f ${PACKAGELIST_DIR}/Packages.Binary.Buildroot.tmp
+rm -f ${PACKAGELIST_DIR}/Packages.Source.Buildroot.NVR.all-arches
 for this_arch in ${ARCH_LIST[@]}
 do
   DATA_DIR="${DATA_DIR_BASE}/${this_arch}"
   cat ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt >> ${PACKAGELIST_DIR}/Packages.Binary.Buildroot.tmp
+  cat ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-nvrs.txt >> ${PACKAGELIST_DIR}/Packages.Source.Buildroot.NVR.all-arches
 done
 cat ${PACKAGELIST_DIR}/Packages.Binary.Buildroot.tmp | sort | uniq -cd | sed -n -e 's/^ *4 \(.*\)/\1/p' | sort -u -o ${PACKAGELIST_DIR}/Packages.Binary.Buildroot.common
+sort -u -o ${PACKAGELIST_DIR}/Packages.Source.Buildroot.NVR.all-arches ${PACKAGELIST_DIR}/Packages.Source.Buildroot.NVR.all-arches
 
 # Generate the buildroot workload
 rm -f ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
