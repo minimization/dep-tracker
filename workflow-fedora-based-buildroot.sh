@@ -75,22 +75,27 @@ rm -f ${PACKAGELIST_DIR}/Packages.Source.Buildroot.NVR.all-arches
 for this_arch in ${ARCH_LIST[@]}
 do
   DATA_DIR="${DATA_DIR_BASE}/${this_arch}"
+  comm -13 ${DATA_DIR}/${NEW_DIR}/Packages.${this_arch} ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt | sort -u -o ${DATA_DIR}/${NEW_DIR}/added-binary-package-names.txt
+  cat ${DATA_DIR}/${NEW_DIR}/added-binary-package-names.txt >> ${PACKAGELIST_DIR}/Packages.added.tmp
   cat ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt >> ${PACKAGELIST_DIR}/Packages.Binary.Buildroot.tmp
   cat ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-nvrs.txt >> ${PACKAGELIST_DIR}/Packages.Source.Buildroot.NVR.all-arches
 done
+cat ${PACKAGELIST_DIR}/Packages.added.tmp | sort | uniq -cd | sed -n -e 's/^ *4 \(.*\)/\1/p' | sort -u -o ${PACKAGELIST_DIR}/Packages.added.common
 cat ${PACKAGELIST_DIR}/Packages.Binary.Buildroot.tmp | sort | uniq -cd | sed -n -e 's/^ *4 \(.*\)/\1/p' | sort -u -o ${PACKAGELIST_DIR}/Packages.Binary.Buildroot.common
 sort -u -o ${PACKAGELIST_DIR}/Packages.Source.Buildroot.NVR.all-arches ${PACKAGELIST_DIR}/Packages.Source.Buildroot.NVR.all-arches
 
 # Generate the buildroot workload
 rm -f ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
 cat ${WORK_DIR}/conf/${VIEW}-buildroot-workload.head >> ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
-cat ${PACKAGELIST_DIR}/Packages.Binary.Buildroot.common | awk '{print "        - " $1}' >> ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
+#cat ${PACKAGELIST_DIR}/Packages.Binary.Buildroot.common | awk '{print "        - " $1}' >> ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
+cat ${PACKAGELIST_DIR}/Packages.added.common | awk '{print "        - " $1}' >> ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
 echo "    arch_packages:" >> ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
 for this_arch in ${ARCH_LIST[@]}
 do
   DATA_DIR="${DATA_DIR_BASE}/${this_arch}"
   echo "        ${this_arch}:" >> ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
-  comm -13 ${PACKAGELIST_DIR}/Packages.Binary.Buildroot.common ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt | awk '{print "            - " $1}' >> ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
+  comm -13 ${PACKAGELIST_DIR}/Packages.added.common ${DATA_DIR}/${NEW_DIR}/added-binary-package-names.txt | awk '{print "            - " $1}' >> ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
+  #comm -13 ${PACKAGELIST_DIR}/Packages.Binary.Buildroot.common ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt | awk '{print "            - " $1}' >> ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
 done
 
 # Trim buildroot workload of packages we don't want in there
