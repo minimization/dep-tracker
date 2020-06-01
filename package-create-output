@@ -1,0 +1,145 @@
+#!/bin/bash
+# Given a source rpm NVR, gather all the package information
+#  for all the arches.
+#
+
+errexit() {
+    echo "$@" >&2
+    exit 5
+}
+
+WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source $WORK_DIR/conf/config.inc
+
+if [ $# -ne 1 ]; then
+    errexit "Usage: $0 [ --repo reponame ] package-info-path"
+fi
+
+input_package_path="$1"
+
+if ! [ -d ${input_package_path} ] ; then
+    errexit "Package info path not found: ${input_package_path}"
+fi
+
+###################
+# Common Variables
+###################
+PACKAGE=$(cat ${input_package_path}/source-name.txt)
+PACKAGE_NVR=$(grep .src$ ${input_package_path}/nvr-list.txt | sed 's/.src$//')
+JSON_FILE="${input_package_path}/package.json"
+
+###################
+# Create json file
+###################
+rm -f ${JSON_FILE}
+pushd ${input_package_path} >/dev/null
+echo "{" >> ${JSON_FILE}
+echo "  \"name\": \"$(cat source-name.txt)\"," >> ${JSON_FILE}
+echo "  \"task-number\": \"$(cat task-number.txt)\"," >> ${JSON_FILE}
+echo "  \"nvra-list\": [" >> ${JSON_FILE}
+echo "$(cat nvr-list.txt | awk '{print "    \"" $1 "\","}')" >> ${JSON_FILE}
+sed -i '$ s/.$//' ${JSON_FILE}
+echo "  ]," >> ${JSON_FILE}
+echo "  \"source-rpm\": {" >> ${JSON_FILE}
+echo "    \"name\": \"$(cat source-name.txt)\"," >> ${JSON_FILE}
+echo "    \"nvr\": \"$(cat nvr-list.txt | grep .src$ | sed 's/.src$//')\"," >> ${JSON_FILE}
+echo "    \"deps\": [" >> ${JSON_FILE}
+echo "$(cat source-deps.txt | awk '{print "      \"" $1 "\","}')" >> ${JSON_FILE}
+sed -i '$ s/.$//' ${JSON_FILE}
+echo "    ]," >> ${JSON_FILE}
+if ! diff -q source-deps.txt source-common-deps.txt > /dev/null ; then
+  echo "    \"common-deps\": [" >> ${JSON_FILE}
+  echo "$(cat source-common-deps.txt | awk '{print "      \"" $1 "\","}')" >> ${JSON_FILE}
+  sed -i '$ s/.$//' ${JSON_FILE}
+  echo "    ]," >> ${JSON_FILE}
+  echo "    \"arch-deps\": {" >> ${JSON_FILE}
+  echo "      \"aarch64\":[" >> ${JSON_FILE}
+  echo "$(cat aarch64/sourcedeps.txt | awk '{print "        \"" $1 "\","}')" >> ${JSON_FILE}
+  sed -i '$ s/.$//' ${JSON_FILE}
+  echo "      ]," >> ${JSON_FILE}
+  echo "      \"ppc64le\":[" >> ${JSON_FILE}
+  echo "$(cat ppc64le/sourcedeps.txt | awk '{print "        \"" $1 "\","}')" >> ${JSON_FILE}
+  sed -i '$ s/.$//' ${JSON_FILE}
+  echo "      ]," >> ${JSON_FILE}
+  echo "      \"s390x\":[" >> ${JSON_FILE}
+  echo "$(cat s390x/sourcedeps.txt | awk '{print "        \"" $1 "\","}')" >> ${JSON_FILE}
+  sed -i '$ s/.$//' ${JSON_FILE}
+  echo "      ]," >> ${JSON_FILE}
+  echo "      \"x86_64\":[" >> ${JSON_FILE}
+  echo "$(cat x86_64/sourcedeps.txt | awk '{print "        \"" $1 "\","}')" >> ${JSON_FILE}
+  sed -i '$ s/.$//' ${JSON_FILE}
+  echo "      ]," >> ${JSON_FILE}
+  echo "    }" >> ${JSON_FILE}
+else
+  sed -i '$ s/.$//' ${JSON_FILE}
+fi
+echo "  }," >> ${JSON_FILE}
+echo "  \"binary-rpm\": {" >> ${JSON_FILE}
+echo "    \"name-list\": [" >> ${JSON_FILE}
+echo "$(cat binary-name-list.txt | awk '{print "      \"" $1 "\","}')" >> ${JSON_FILE}
+sed -i '$ s/.$//' ${JSON_FILE}
+echo "    ]," >> ${JSON_FILE}
+echo "    \"deps\": [" >> ${JSON_FILE}
+echo "$(cat binary-deps.txt | awk '{print "      \"" $1 "\","}')" >> ${JSON_FILE}
+sed -i '$ s/.$//' ${JSON_FILE}
+echo "    ]," >> ${JSON_FILE}
+echo "    \"packages\": [" >> ${JSON_FILE}
+for package_name in $(cat binary-name-list.txt)
+do
+  echo "      {" >> ${JSON_FILE}
+  echo "        \"name\": \"${package_name}\"," >> ${JSON_FILE}
+  echo "        \"deps\": [" >> ${JSON_FILE}
+  echo "$(cat ${package_name}-deps.txt | awk '{print "          \"" $1 "\","}')" >> ${JSON_FILE}
+  sed -i '$ s/.$//' ${JSON_FILE}
+  echo "        ]," >> ${JSON_FILE}
+  if ! diff -q ${package_name}-deps.txt ${package_name}-common-deps.txt > /dev/null ; then
+    echo "        \"common-deps\": [" >> ${JSON_FILE}
+    echo "$(cat ${package_name}-common-deps.txt | awk '{print "          \"" $1 "\","}')" >> ${JSON_FILE}
+    sed -i '$ s/.$//' ${JSON_FILE}
+    echo "        ]," >> ${JSON_FILE}
+    echo "        \"arch-deps\": {" >> ${JSON_FILE}
+    echo "          \"noarch\":[" >> ${JSON_FILE}
+    echo "$(cat noarch/${package_name}-deps.txt | awk '{print "            \"" $1 "\","}')" >> ${JSON_FILE}
+    sed -i '$ s/.$//' ${JSON_FILE}
+    echo "          ]," >> ${JSON_FILE}
+    echo "          \"aarch64\":[" >> ${JSON_FILE}
+    echo "$(cat aarch64/${package_name}-deps.txt | awk '{print "            \"" $1 "\","}')" >> ${JSON_FILE}
+    sed -i '$ s/.$//' ${JSON_FILE}
+    echo "          ]," >> ${JSON_FILE}
+    echo "          \"ppc64le\":[" >> ${JSON_FILE}
+    echo "$(cat ppc64le/${package_name}-deps.txt | awk '{print "            \"" $1 "\","}')" >> ${JSON_FILE}
+    sed -i '$ s/.$//' ${JSON_FILE}
+    echo "          ]," >> ${JSON_FILE}
+    echo "          \"s390x\":[" >> ${JSON_FILE}
+    echo "$(cat s390x/${package_name}-deps.txt | awk '{print "            \"" $1 "\","}')" >> ${JSON_FILE}
+    sed -i '$ s/.$//' ${JSON_FILE}
+    echo "          ]," >> ${JSON_FILE}
+    echo "          \"x86_64\":[" >> ${JSON_FILE}
+    echo "$(cat x86_64/${package_name}-deps.txt | awk '{print "            \"" $1 "\","}')" >> ${JSON_FILE}
+    sed -i '$ s/.$//' ${JSON_FILE}
+    echo "          ]," >> ${JSON_FILE}
+    echo "        }" >> ${JSON_FILE}
+  else
+    sed -i '$ s/.$//' ${JSON_FILE}
+  fi
+  echo "      }," >> ${JSON_FILE}
+done
+sed -i '$ s/.$//' ${JSON_FILE}
+echo "    ]" >> ${JSON_FILE}
+echo "  }," >> ${JSON_FILE}
+echo "  \"changes\": {" >> ${JSON_FILE}
+echo "    \"last-nvr\": \"$(cat changes-nvr.txt)\"," >> ${JSON_FILE}
+echo "    \"last-change-nvr\": \"$(cat changes-last-time-deps-changed.txt)\"," >> ${JSON_FILE}
+echo "    \"last-source-dep\": [" >> ${JSON_FILE}
+echo "$(cat changes-source-deps.txt | awk '{print "      \"" $1 "\","}')" >> ${JSON_FILE}
+sed -i '$ s/.$//' ${JSON_FILE}
+echo "    ]," >> ${JSON_FILE}
+echo "    \"last-binary-dep\": [" >> ${JSON_FILE}
+echo "$(cat changes-binary-deps.txt | awk '{print "      \"" $1 "\","}')" >> ${JSON_FILE}
+sed -i '$ s/.$//' ${JSON_FILE}
+echo "    ]" >> ${JSON_FILE}
+echo "  }" >> ${JSON_FILE}
+echo "}" >> ${JSON_FILE}
+popd  >/dev/null # ${input_package_path}
+
+exit 0
