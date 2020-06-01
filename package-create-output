@@ -27,6 +27,7 @@ fi
 PACKAGE=$(cat ${input_package_path}/source-name.txt)
 PACKAGE_NVR=$(grep .src$ ${input_package_path}/nvr-list.txt | sed 's/.src$//')
 JSON_FILE="${input_package_path}/package.json"
+HTML_FILE="${input_package_path}/index.html"
 
 ###################
 # Create json file
@@ -34,15 +35,15 @@ JSON_FILE="${input_package_path}/package.json"
 rm -f ${JSON_FILE}
 pushd ${input_package_path} >/dev/null
 echo "{" >> ${JSON_FILE}
-echo "  \"name\": \"$(cat source-name.txt)\"," >> ${JSON_FILE}
+echo "  \"name\": \"${PACKAGE}\"," >> ${JSON_FILE}
 echo "  \"task-number\": \"$(cat task-number.txt)\"," >> ${JSON_FILE}
 echo "  \"nvra-list\": [" >> ${JSON_FILE}
 echo "$(cat nvr-list.txt | awk '{print "    \"" $1 "\","}')" >> ${JSON_FILE}
 sed -i '$ s/.$//' ${JSON_FILE}
 echo "  ]," >> ${JSON_FILE}
 echo "  \"source-rpm\": {" >> ${JSON_FILE}
-echo "    \"name\": \"$(cat source-name.txt)\"," >> ${JSON_FILE}
-echo "    \"nvr\": \"$(cat nvr-list.txt | grep .src$ | sed 's/.src$//')\"," >> ${JSON_FILE}
+echo "    \"name\": \"${PACKAGE}\"," >> ${JSON_FILE}
+echo "    \"nvr\": \"${PACKAGE_NVR}\"," >> ${JSON_FILE}
 echo "    \"deps\": [" >> ${JSON_FILE}
 echo "$(cat source-deps.txt | awk '{print "      \"" $1 "\","}')" >> ${JSON_FILE}
 sed -i '$ s/.$//' ${JSON_FILE}
@@ -140,6 +141,97 @@ sed -i '$ s/.$//' ${JSON_FILE}
 echo "    ]" >> ${JSON_FILE}
 echo "  }" >> ${JSON_FILE}
 echo "}" >> ${JSON_FILE}
+popd  >/dev/null # ${input_package_path}
+
+
+###################
+# Create json file
+###################
+rm -f ${HTML_FILE}
+pushd ${input_package_path} >/dev/null
+
+echo "<html>" >> ${HTML_FILE}
+echo "<head><title>${PACKAGE} Info</title></head>" >> ${HTML_FILE}
+echo "<body>" >> ${HTML_FILE}
+echo "<h1>${PACKAGE}</h1>" >> ${HTML_FILE}
+echo "<p>Build: <b>${PACKAGE_NVR}</b>" >> ${HTML_FILE}
+echo "<br>Page updated: $(date)" >> ${HTML_FILE}
+echo "</p>" >> ${HTML_FILE}
+
+echo "<h2>Changes</h2>" >> ${HTML_FILE}
+echo "<p>Last changed package: $(cat changes-last-time-deps-changed.txt)" >> ${HTML_FILE}
+echo "<ul>" >> ${HTML_FILE}
+echo "Last changed source deps:" >> ${HTML_FILE}
+echo "$(cat changes-source-deps.txt | awk '{print "    <li>" $1 "</li>"}')" >> ${HTML_FILE}
+echo "</ul>" >> ${HTML_FILE}
+echo "<ul>" >> ${HTML_FILE}
+echo "Last changed binary deps:" >> ${HTML_FILE}
+echo "$(cat changes-binary-deps.txt | awk '{print "    <li>" $1 "</li>"}')" >> ${HTML_FILE}
+echo "</ul>" >> ${HTML_FILE}
+echo "</p>" >> ${HTML_FILE}
+
+echo "<h2>Source</h2>" >> ${HTML_FILE}
+echo "<ul>" >> ${HTML_FILE}
+echo "<b>deps</b>" >> ${HTML_FILE}
+echo "$(cat source-deps.txt | awk '{print "  <li>" $1 "</li>"}')" >> ${HTML_FILE}
+echo "</ul>" >> ${HTML_FILE}
+if ! diff -q source-deps.txt source-common-deps.txt > /dev/null ; then
+echo "<ul>" >> ${HTML_FILE}
+echo "  <b>common-deps</b>" >> ${HTML_FILE}
+echo "$(cat source-common-deps.txt | awk '{print "  <li>" $1 "</li>"}')" >> ${HTML_FILE}
+echo "<\ul>" >> ${HTML_FILE}
+echo "<ul><b>arch-deps</b>" >> ${HTML_FILE}
+echo "<ul>aarch64" >> ${HTML_FILE}
+echo "$(cat aarch64/sourcedeps.txt | awk '{print "    <li>" $1 "</li>"}')" >> ${HTML_FILE}
+echo "</ul><ul>ppc64le" >> ${HTML_FILE}
+echo "$(cat ppc64le/sourcedeps.txt | awk '{print "    <li>" $1 "</li>"}')" >> ${HTML_FILE}
+echo "</ul><ul>s390x" >> ${HTML_FILE}
+echo "$(cat s390x/sourcedeps.txt | awk '{print "    <li>" $1 "</li>"}')" >> ${HTML_FILE}
+echo "</ul><ul>x86_64" >> ${HTML_FILE}
+echo "$(cat x86_64/sourcedeps.txt | awk '{print "    <li>" $1 "</li>"}')" >> ${HTML_FILE}
+echo "</ul></ul>" >> ${HTML_FILE}
+fi
+
+echo "<h2>Binaries</h2>" >> ${HTML_FILE}
+echo "<ul>" >> ${HTML_FILE}
+echo "$(cat binary-name-list.txt | awk '{print "  <li>" $1 "</li>"}')" >> ${HTML_FILE}
+echo "</ul>" >> ${HTML_FILE}
+
+echo "<h3>Overall</h3>" >> ${HTML_FILE}
+echo "<ul>" >> ${HTML_FILE}
+echo "<b>deps</b>" >> ${HTML_FILE}
+echo "$(cat binary-deps.txt | awk '{print "  <li>" $1 "</li>"}')" >> ${HTML_FILE}
+echo "</ul>" >> ${HTML_FILE}
+
+echo "<h3>By Subpackage</h3>" >> ${HTML_FILE}
+for package_name in $(cat binary-name-list.txt)
+do
+echo "  <h4>${package_name}</h4>" >> ${HTML_FILE}
+echo "  <ul>" >> ${HTML_FILE}
+echo "  <b>deps</b>" >> ${HTML_FILE}
+echo "$(cat ${package_name}-deps.txt | awk '{print "    <li>" $1 "</li>"}')" >> ${HTML_FILE}
+echo "  </ul>" >> ${HTML_FILE}
+  if ! diff -q ${package_name}-deps.txt ${package_name}-common-deps.txt > /dev/null ; then
+echo "  <ul>" >> ${HTML_FILE}
+echo "  <b>common-deps</b>" >> ${HTML_FILE}
+echo "$(cat ${package_name}-common-deps.txt | awk '{print "    <li>" $1 "</li>"}')" >> ${HTML_FILE}
+echo "  <\ul>" >> ${HTML_FILE}
+echo "  <ul><b>arch-deps</b>" >> ${HTML_FILE}
+echo "  <ul>noarch" >> ${HTML_FILE}
+echo "$(cat noarch/${package_name}-deps.txt | awk '{print "      <li>" $1 "</li>"}')" >> ${HTML_FILE}
+echo "  </ul><ul>aarch64" >> ${HTML_FILE}
+echo "$(cat aarch64/${package_name}-deps.txt | awk '{print "      <li>" $1 "</li>"}')" >> ${HTML_FILE}
+echo "  </ul><ul>ppc64le" >> ${HTML_FILE}
+echo "$(cat ppc64le/${package_name}-deps.txt | awk '{print "      <li>" $1 "</li>"}')" >> ${HTML_FILE}
+echo "  </ul><ul>s390x" >> ${HTML_FILE}
+echo "$(cat s390x/${package_name}-deps.txt | awk '{print "      <li>" $1 "</li>"}')" >> ${HTML_FILE}
+echo "  </ul><ul>x86_64" >> ${HTML_FILE}
+echo "$(cat x86_64/${package_name}-deps.txt | awk '{print "      <li>" $1 "</li>"}')" >> ${HTML_FILE}
+echo "  </ul></ul>" >> ${HTML_FILE}
+  fi
+done
+echo "</body>" >> ${HTML_FILE}
+echo "</html>" >> ${HTML_FILE}
 popd  >/dev/null # ${input_package_path}
 
 exit 0
