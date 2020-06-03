@@ -73,4 +73,25 @@ do
  fi
 done
 
+#####
+# Create main html index
+#####
+echo "Creating main index.html"
+HTML_FILE="${PACKAGE_DIR_BASE}/index.html"
+rm -f ${HTML_FILE}
+echo "<html>" >> ${HTML_FILE}
+echo "<head><title>${REPONAME} Package Info</title></head>" >> ${HTML_FILE}
+echo "<body>" >> ${HTML_FILE}
+echo "<h1>${REPONAME} Package Info</h1>" >> ${HTML_FILE}
+ls -1 ${PACKAGE_DIR_BASE}/*/${REPONAME}-latest/index.html | sed 's|/index.html$||' | while read package_path
+do
+  package_name=$(cat ${package_path}/source-name.txt)
+  package_nvr=$(grep .src$ ${package_path}/nvr-list.txt | sed 's/.src$//')
+  echo "<br><a href=\"${package_name}/${package_nvr}/index.html\"><b>${package_name}</b></a> ${package_nvr}" >> ${HTML_FILE}
+done
+echo "</body>" >> ${HTML_FILE}
+echo "</html>" >> ${HTML_FILE}
+
+echo "Finished"
+
 exit 0

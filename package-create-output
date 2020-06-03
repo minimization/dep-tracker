@@ -156,6 +156,7 @@ echo "<body>" >> ${HTML_FILE}
 echo "<h1>${PACKAGE}</h1>" >> ${HTML_FILE}
 echo "<p>Build: <b>${PACKAGE_NVR}</b>" >> ${HTML_FILE}
 echo "<br>Page updated: $(date)" >> ${HTML_FILE}
+echo "<br><a href=\"../../index.html\">${REPONAME} index</a>" >> ${HTML_FILE}
 echo "</p>" >> ${HTML_FILE}
 
 echo "<hr>" >> ${HTML_FILE}
