@@ -65,5 +65,12 @@ done
 #####
 # generate output for all packages that do not have it yet
 #####
+ls -1d ${PACKAGE_DIR_BASE}/*/${REPONAME}-latest | while read package_path
+do
+ if ! [ -s ${package_path}/index.html ] ; then
+   echo "Output: $( echo ${package_path} | sed "s|/${REPONAME}-latest$||")"
+   ${WORK_DIR}/package-create-output ${package_path}
+ fi
+done
 
 exit 0
