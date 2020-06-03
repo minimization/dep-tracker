@@ -55,19 +55,19 @@ if ! diff -q source-deps.txt source-common-deps.txt > /dev/null ; then
   echo "    ]," >> ${JSON_FILE}
   echo "    \"arch-deps\": {" >> ${JSON_FILE}
   echo "      \"aarch64\":[" >> ${JSON_FILE}
-  echo "$(cat aarch64/sourcedeps.txt | awk '{print "        \"" $1 "\","}')" >> ${JSON_FILE}
+  echo "$(cat aarch64/sourcedeps.txt 2>/dev/null | awk '{print "        \"" $1 "\","}')" >> ${JSON_FILE}
   sed -i '$ s/.$//' ${JSON_FILE}
   echo "      ]," >> ${JSON_FILE}
   echo "      \"ppc64le\":[" >> ${JSON_FILE}
-  echo "$(cat ppc64le/sourcedeps.txt | awk '{print "        \"" $1 "\","}')" >> ${JSON_FILE}
+  echo "$(cat ppc64le/sourcedeps.txt 2>/dev/null | awk '{print "        \"" $1 "\","}')" >> ${JSON_FILE}
   sed -i '$ s/.$//' ${JSON_FILE}
   echo "      ]," >> ${JSON_FILE}
   echo "      \"s390x\":[" >> ${JSON_FILE}
-  echo "$(cat s390x/sourcedeps.txt | awk '{print "        \"" $1 "\","}')" >> ${JSON_FILE}
+  echo "$(cat s390x/sourcedeps.txt 2>/dev/null | awk '{print "        \"" $1 "\","}')" >> ${JSON_FILE}
   sed -i '$ s/.$//' ${JSON_FILE}
   echo "      ]," >> ${JSON_FILE}
   echo "      \"x86_64\":[" >> ${JSON_FILE}
-  echo "$(cat x86_64/sourcedeps.txt | awk '{print "        \"" $1 "\","}')" >> ${JSON_FILE}
+  echo "$(cat x86_64/sourcedeps.txt 2>/dev/null | awk '{print "        \"" $1 "\","}')" >> ${JSON_FILE}
   sed -i '$ s/.$//' ${JSON_FILE}
   echo "      ]," >> ${JSON_FILE}
   echo "    }" >> ${JSON_FILE}
@@ -100,23 +100,23 @@ do
     echo "        ]," >> ${JSON_FILE}
     echo "        \"arch-deps\": {" >> ${JSON_FILE}
     echo "          \"noarch\":[" >> ${JSON_FILE}
-    echo "$(cat noarch/${package_name}-deps.txt | awk '{print "            \"" $1 "\","}')" >> ${JSON_FILE}
+    echo "$(cat noarch/${package_name}-deps.txt 2>/dev/null | awk '{print "            \"" $1 "\","}')" >> ${JSON_FILE}
     sed -i '$ s/.$//' ${JSON_FILE}
     echo "          ]," >> ${JSON_FILE}
     echo "          \"aarch64\":[" >> ${JSON_FILE}
-    echo "$(cat aarch64/${package_name}-deps.txt | awk '{print "            \"" $1 "\","}')" >> ${JSON_FILE}
+    echo "$(cat aarch64/${package_name}-deps.txt 2>/dev/null | awk '{print "            \"" $1 "\","}')" >> ${JSON_FILE}
     sed -i '$ s/.$//' ${JSON_FILE}
     echo "          ]," >> ${JSON_FILE}
     echo "          \"ppc64le\":[" >> ${JSON_FILE}
-    echo "$(cat ppc64le/${package_name}-deps.txt | awk '{print "            \"" $1 "\","}')" >> ${JSON_FILE}
+    echo "$(cat ppc64le/${package_name}-deps.txt 2>/dev/null | awk '{print "            \"" $1 "\","}')" >> ${JSON_FILE}
     sed -i '$ s/.$//' ${JSON_FILE}
     echo "          ]," >> ${JSON_FILE}
     echo "          \"s390x\":[" >> ${JSON_FILE}
-    echo "$(cat s390x/${package_name}-deps.txt | awk '{print "            \"" $1 "\","}')" >> ${JSON_FILE}
+    echo "$(cat s390x/${package_name}-deps.txt 2>/dev/null | awk '{print "            \"" $1 "\","}')" >> ${JSON_FILE}
     sed -i '$ s/.$//' ${JSON_FILE}
     echo "          ]," >> ${JSON_FILE}
     echo "          \"x86_64\":[" >> ${JSON_FILE}
-    echo "$(cat x86_64/${package_name}-deps.txt | awk '{print "            \"" $1 "\","}')" >> ${JSON_FILE}
+    echo "$(cat x86_64/${package_name}-deps.txt 2>/dev/null | awk '{print "            \"" $1 "\","}')" >> ${JSON_FILE}
     sed -i '$ s/.$//' ${JSON_FILE}
     echo "          ]," >> ${JSON_FILE}
     echo "        }" >> ${JSON_FILE}
@@ -145,7 +145,7 @@ popd  >/dev/null # ${input_package_path}
 
 
 ###################
-# Create json file
+# Create html file
 ###################
 rm -f ${HTML_FILE}
 pushd ${input_package_path} >/dev/null
@@ -173,26 +173,36 @@ echo "</p>" >> ${HTML_FILE}
 
 echo "<hr>" >> ${HTML_FILE}
 echo "<h2>Source</h2>" >> ${HTML_FILE}
-echo "<ul>" >> ${HTML_FILE}
-echo "<b>deps</b>" >> ${HTML_FILE}
+echo "<ul><b>deps</b><ul>" >> ${HTML_FILE}
 echo "$(cat source-deps.txt | awk '{print "  <li>" $1 "</li>"}')" >> ${HTML_FILE}
-echo "</ul>" >> ${HTML_FILE}
-if ! diff -q source-deps.txt source-common-deps.txt > /dev/null ; then
-echo "<ul>" >> ${HTML_FILE}
-echo "  <b>common-deps</b>" >> ${HTML_FILE}
-echo "$(cat source-common-deps.txt | awk '{print "  <li>" $1 "</li>"}')" >> ${HTML_FILE}
-echo "<\ul>" >> ${HTML_FILE}
-echo "<ul><b>arch-deps</b>" >> ${HTML_FILE}
-echo "<ul>aarch64" >> ${HTML_FILE}
-echo "$(cat aarch64/sourcedeps.txt | awk '{print "    <li>" $1 "</li>"}')" >> ${HTML_FILE}
-echo "</ul><ul>ppc64le" >> ${HTML_FILE}
-echo "$(cat ppc64le/sourcedeps.txt | awk '{print "    <li>" $1 "</li>"}')" >> ${HTML_FILE}
-echo "</ul><ul>s390x" >> ${HTML_FILE}
-echo "$(cat s390x/sourcedeps.txt | awk '{print "    <li>" $1 "</li>"}')" >> ${HTML_FILE}
-echo "</ul><ul>x86_64" >> ${HTML_FILE}
-echo "$(cat x86_64/sourcedeps.txt | awk '{print "    <li>" $1 "</li>"}')" >> ${HTML_FILE}
 echo "</ul></ul>" >> ${HTML_FILE}
-fi
+  if ! diff -q source-deps.txt source-common-deps.txt > /dev/null ; then
+    echo "  <ul><b>common-deps</b><ul>" >> ${HTML_FILE}
+    echo "$(cat source-common-deps.txt | awk '{print "    <li>" $1 "</li>"}')" >> ${HTML_FILE}
+    echo "  </ul></ul>" >> ${HTML_FILE}
+    echo "  <ul><b>arch-deps</b>" >> ${HTML_FILE}
+    if [ -s  aarch64/sourcedeps.txt ] ; then
+      echo "  <ul><b>aarch64</b><ul>" >> ${HTML_FILE}
+      echo "$(comm -13 source-common-deps.txt aarch64/sourcedeps.txt | awk '{print "      <li>" $1 "</li>"}')" >> ${HTML_FILE}
+      echo "  </ul></ul>" >> ${HTML_FILE}
+    fi
+    if [ -s  ppc64le/sourcedeps.txt ] ; then
+      echo "  <ul><b>ppc64le</b><ul>" >> ${HTML_FILE}
+      echo "$(comm -13 source-common-deps.txt ppc64le/sourcedeps.txt | awk '{print "      <li>" $1 "</li>"}')" >> ${HTML_FILE}
+      echo "  </ul></ul>" >> ${HTML_FILE}
+    fi
+    if [ -s  s390x/sourcedeps.txt ] ; then
+      echo "  <ul><b>s390x</b><ul>" >> ${HTML_FILE}
+      echo "$(comm -13 source-common-deps.txt s390x/sourcedeps.txt | awk '{print "      <li>" $1 "</li>"}')" >> ${HTML_FILE}
+      echo "  </ul></ul>" >> ${HTML_FILE}
+    fi
+    if [ -s  x86_64/sourcedeps.txt ] ; then
+      echo "  <ul><b>x86_64</b><ul>" >> ${HTML_FILE}
+      echo "$(comm -13 source-common-deps.txt x86_64/sourcedeps.txt | awk '{print "      <li>" $1 "</li>"}')" >> ${HTML_FILE}
+      echo "  </ul></ul>" >> ${HTML_FILE}
+    fi
+    echo "  </ul></ul>" >> ${HTML_FILE}
+  fi
 
 echo "<hr>" >> ${HTML_FILE}
 echo "<h2>Binaries</h2>" >> ${HTML_FILE}
@@ -201,36 +211,48 @@ echo "$(cat binary-name-list.txt | awk '{print "  <li>" $1 "</li>"}')" >> ${HTML
 echo "</ul>" >> ${HTML_FILE}
 
 echo "<h3>Overall</h3>" >> ${HTML_FILE}
-echo "<ul>" >> ${HTML_FILE}
-echo "<b>deps</b>" >> ${HTML_FILE}
+echo "<ul><b>deps</b><ul>" >> ${HTML_FILE}
 echo "$(cat binary-deps.txt | awk '{print "  <li>" $1 "</li>"}')" >> ${HTML_FILE}
-echo "</ul>" >> ${HTML_FILE}
+echo "</ul></ul>" >> ${HTML_FILE}
 
 echo "<h3>By Subpackage</h3>" >> ${HTML_FILE}
 for package_name in $(cat binary-name-list.txt)
 do
 echo "  <h4>${package_name}</h4>" >> ${HTML_FILE}
-echo "  <ul>" >> ${HTML_FILE}
-echo "  <b>deps</b>" >> ${HTML_FILE}
+echo "  <ul><b>deps</b><ul>" >> ${HTML_FILE}
 echo "$(cat ${package_name}-deps.txt | awk '{print "    <li>" $1 "</li>"}')" >> ${HTML_FILE}
-echo "  </ul>" >> ${HTML_FILE}
-  if ! diff -q ${package_name}-deps.txt ${package_name}-common-deps.txt > /dev/null ; then
-echo "  <ul>" >> ${HTML_FILE}
-echo "  <b>common-deps</b>" >> ${HTML_FILE}
-echo "$(cat ${package_name}-common-deps.txt | awk '{print "    <li>" $1 "</li>"}')" >> ${HTML_FILE}
-echo "  <\ul>" >> ${HTML_FILE}
-echo "  <ul><b>arch-deps</b>" >> ${HTML_FILE}
-echo "  <ul>noarch" >> ${HTML_FILE}
-echo "$(cat noarch/${package_name}-deps.txt | awk '{print "      <li>" $1 "</li>"}')" >> ${HTML_FILE}
-echo "  </ul><ul>aarch64" >> ${HTML_FILE}
-echo "$(cat aarch64/${package_name}-deps.txt | awk '{print "      <li>" $1 "</li>"}')" >> ${HTML_FILE}
-echo "  </ul><ul>ppc64le" >> ${HTML_FILE}
-echo "$(cat ppc64le/${package_name}-deps.txt | awk '{print "      <li>" $1 "</li>"}')" >> ${HTML_FILE}
-echo "  </ul><ul>s390x" >> ${HTML_FILE}
-echo "$(cat s390x/${package_name}-deps.txt | awk '{print "      <li>" $1 "</li>"}')" >> ${HTML_FILE}
-echo "  </ul><ul>x86_64" >> ${HTML_FILE}
-echo "$(cat x86_64/${package_name}-deps.txt | awk '{print "      <li>" $1 "</li>"}')" >> ${HTML_FILE}
 echo "  </ul></ul>" >> ${HTML_FILE}
+  if ! diff -q ${package_name}-deps.txt ${package_name}-common-deps.txt > /dev/null ; then
+    echo "  <ul><b>common-deps</b><ul>" >> ${HTML_FILE}
+    echo "$(comm -13 ${package_name}-deps.txt ${package_name}-common-deps.txt | awk '{print "    <li>" $1 "</li>"}')" >> ${HTML_FILE}
+    echo "  </ul></ul>" >> ${HTML_FILE}
+    echo "  <ul><b>arch-deps</b>" >> ${HTML_FILE}
+    if [ -s  noarch/${package_name}-deps.txt ] ; then
+      echo "  <ul><b>noarch</b><ul>" >> ${HTML_FILE}
+      echo "$(comm -13 ${package_name}-common-deps.txt noarch/${package_name}-deps.txt | awk '{print "      <li>" $1 "</li>"}')" >> ${HTML_FILE}
+      echo "  </ul></ul>" >> ${HTML_FILE}
+    fi
+    if [ -s  aarch64/${package_name}-deps.txt ] ; then
+      echo "  <ul><b>aarch64</b><ul>" >> ${HTML_FILE}
+      echo "$(comm -13 ${package_name}-common-deps.txt aarch64/${package_name}-deps.txt | awk '{print "      <li>" $1 "</li>"}')" >> ${HTML_FILE}
+      echo "  </ul></ul>" >> ${HTML_FILE}
+    fi
+    if [ -s  ppc64le/${package_name}-deps.txt ] ; then
+      echo "  <ul><b>ppc64le</b><ul>" >> ${HTML_FILE}
+      echo "$(comm -13 ${package_name}-common-deps.txt ppc64le/${package_name}-deps.txt | awk '{print "      <li>" $1 "</li>"}')" >> ${HTML_FILE}
+      echo "  </ul></ul>" >> ${HTML_FILE}
+    fi
+    if [ -s  s390x/${package_name}-deps.txt ] ; then
+      echo "  <ul><b>s390x</b><ul>" >> ${HTML_FILE}
+      echo "$(comm -13 ${package_name}-common-deps.txt s390x/${package_name}-deps.txt | awk '{print "      <li>" $1 "</li>"}')" >> ${HTML_FILE}
+      echo "  </ul></ul>" >> ${HTML_FILE}
+    fi
+    if [ -s  x86_64/${package_name}-deps.txt ] ; then
+      echo "  <ul><b>x86_64</b><ul>" >> ${HTML_FILE}
+      echo "$(comm -13 ${package_name}-common-deps.txt x86_64/${package_name}-deps.txt | awk '{print "      <li>" $1 "</li>"}')" >> ${HTML_FILE}
+      echo "  </ul></ul>" >> ${HTML_FILE}
+    fi
+    echo "  </ul></ul>" >> ${HTML_FILE}
   fi
 done
 echo "</body>" >> ${HTML_FILE}
