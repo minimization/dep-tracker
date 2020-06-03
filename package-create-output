@@ -158,6 +158,7 @@ echo "<p>Build: <b>${PACKAGE_NVR}</b>" >> ${HTML_FILE}
 echo "<br>Page updated: $(date)" >> ${HTML_FILE}
 echo "</p>" >> ${HTML_FILE}
 
+echo "<hr>" >> ${HTML_FILE}
 echo "<h2>Changes</h2>" >> ${HTML_FILE}
 echo "<p>Last changed package: $(cat changes-last-time-deps-changed.txt)" >> ${HTML_FILE}
 echo "<ul>" >> ${HTML_FILE}
@@ -170,6 +171,7 @@ echo "$(cat changes-binary-deps.txt | awk '{print "    <li>" $1 "</li>"}')" >> $
 echo "</ul>" >> ${HTML_FILE}
 echo "</p>" >> ${HTML_FILE}
 
+echo "<hr>" >> ${HTML_FILE}
 echo "<h2>Source</h2>" >> ${HTML_FILE}
 echo "<ul>" >> ${HTML_FILE}
 echo "<b>deps</b>" >> ${HTML_FILE}
@@ -192,6 +194,7 @@ echo "$(cat x86_64/sourcedeps.txt | awk '{print "    <li>" $1 "</li>"}')" >> ${H
 echo "</ul></ul>" >> ${HTML_FILE}
 fi
 
+echo "<hr>" >> ${HTML_FILE}
 echo "<h2>Binaries</h2>" >> ${HTML_FILE}
 echo "<ul>" >> ${HTML_FILE}
 echo "$(cat binary-name-list.txt | awk '{print "  <li>" $1 "</li>"}')" >> ${HTML_FILE}
