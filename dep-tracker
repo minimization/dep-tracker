@@ -77,7 +77,7 @@ done
 # Create main html index
 #####
 echo "Creating main index.html"
-HTML_FILE="${PACKAGE_DIR_BASE}/index.html"
+HTML_FILE="${PACKAGE_DIR_BASE}/index-${REPONAME}.html"
 rm -f ${HTML_FILE}
 echo "<html>" >> ${HTML_FILE}
 echo "<head><title>${REPONAME} Package Info</title></head>" >> ${HTML_FILE}
