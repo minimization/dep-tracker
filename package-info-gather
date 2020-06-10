@@ -47,6 +47,7 @@ if ! [ -s ${PACKAGE_DIR}/nvr-list.txt ] ; then
 fi
 grep ^Task: buildinfo | awk '{print $2}' > ${PACKAGE_DIR}/task-number.txt
 echo ${this_source_name} > ${PACKAGE_DIR}/source-name.txt
+echo ${this_source_nvr} > ${PACKAGE_DIR}/source-nvr.txt
 
 # Work through everything one arch at a time
 echo "    ${this_source_nvr} dependencies "

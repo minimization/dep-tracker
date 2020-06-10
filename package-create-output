@@ -25,7 +25,7 @@ fi
 # Common Variables
 ###################
 PACKAGE=$(cat ${input_package_path}/source-name.txt)
-PACKAGE_NVR=$(grep .src$ ${input_package_path}/nvr-list.txt | sed 's/.src$//')
+PACKAGE_NVR=$(cat ${input_package_path}/source-nvr.txt)
 JSON_FILE="${input_package_path}/package.json"
 HTML_FILE="${input_package_path}/index.html"
 
