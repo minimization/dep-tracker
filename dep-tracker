@@ -44,7 +44,7 @@ comm -13 ${PACKAGE_DATA_DIR}/Source.NVR ${PACKAGE_DATA_ARCHIVE_DIR}/Source.NVR >
 #####
 # Gather info on all added packages 
 #####
-cat ${PACKAGE_DATA_DIR}/changes.added.NVR | xargs --max-procs=5 -I PACKAGE  ${WORK_DIR}/package-info-gather PACKAGE
+cat ${PACKAGE_DATA_DIR}/changes.added.NVR | xargs --max-procs=5 -I PACKAGE  ${WORK_DIR}/package-info-gather -r ${REPONAME} PACKAGE
 
 #####
 # Remove links not already remove from above 
