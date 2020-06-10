@@ -4,7 +4,7 @@ exclude=generic-release* fedora-release-x* fedora-release-w* fedora-release-s* f
 
 [dt-main]
 name=Fedora Rawhide
-metalink=https://mirrors.fedoraproject.org/metalink?repo=rawhide&arch=$basearch
+baseurl=https://kojipkgs.fedoraproject.org/compose/rawhide/latest-Fedora-Rawhide/compose/Everything/$basearch/os/
 enabled=1
 gpgcheck=0
 
