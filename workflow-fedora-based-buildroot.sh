@@ -22,6 +22,8 @@ if [ "${REPO_BASE}" == "rawhide" ] ; then
   VIEW="prototype-eln"
 elif [ "${REPO_BASE}" == "eln" ] ; then
   VIEW="eln"
+elif [ "${REPO_BASE}" == "released" ] ; then
+  VIEW="released"
 else
   echo "View not setup for ${REPO_BASE}"
   echo "  Exiting."
@@ -32,26 +34,32 @@ fi
 # Get package lists from feedback-pipeline
 mkdir -p ${PACKAGELIST_DIR}
 rm -f ${PACKAGELIST_DIR}/*
-for this_arch in ${ARCH_LIST[@]}
-do
-  echo "Downloading package lists for ${this_arch}"
-  wget -q -O ${PACKAGELIST_DIR}/Packages.${this_arch} ${URL_BASE}view-binary-package-name-list--view-${VIEW}--${this_arch}.txt
-  wget -q -O ${PACKAGELIST_DIR}/Sources.${this_arch} ${URL_BASE}view-source-package-name-list--view-${VIEW}--${this_arch}.txt
-  wget -q -O ${PACKAGELIST_DIR}/Package-NVRs.${this_arch} ${URL_BASE}view-binary-package-list--view-${VIEW}--${this_arch}.txt
-  wget -q -O ${PACKAGELIST_DIR}/Source-NVRs.${this_arch} ${URL_BASE}view-source-package-list--view-${VIEW}--${this_arch}.txt
-	sort -u -o ${PACKAGELIST_DIR}/Packages.${this_arch} ${PACKAGELIST_DIR}/Packages.${this_arch}
-	sort -u -o ${PACKAGELIST_DIR}/Sources.${this_arch} ${PACKAGELIST_DIR}/Sources.${this_arch}
-	sort -u -o ${PACKAGELIST_DIR}/Package-NVRs.${this_arch} ${PACKAGELIST_DIR}/Package-NVRs.${this_arch}
-	sort -u -o ${PACKAGELIST_DIR}/Source-NVRs.${this_arch} ${PACKAGELIST_DIR}/Source-NVRs.${this_arch}
-	cat ${PACKAGELIST_DIR}/Packages.${this_arch} >> ${PACKAGELIST_DIR}/Packages.all-arches
-	cat ${PACKAGELIST_DIR}/Sources.${this_arch} >> ${PACKAGELIST_DIR}/Sources.all-arches
-	cat ${PACKAGELIST_DIR}/Package-NVRs.${this_arch} >> ${PACKAGELIST_DIR}/Package-NVRs.all-arches
-	cat ${PACKAGELIST_DIR}/Source-NVRs.${this_arch} >> ${PACKAGELIST_DIR}/Source-NVRs.all-arches
-done
-sort -u -o ${PACKAGELIST_DIR}/Packages.all-arches ${PACKAGELIST_DIR}/Packages.all-arches
-sort -u -o ${PACKAGELIST_DIR}/Sources.all-arches ${PACKAGELIST_DIR}/Sources.all-arches
-sort -u -o ${PACKAGELIST_DIR}/Package-NVRs.all-arches ${PACKAGELIST_DIR}/Package-NVRs.all-arches
-sort -u -o ${PACKAGELIST_DIR}/Source-NVRs.all-arches ${PACKAGELIST_DIR}/Source-NVRs.all-arches
+if [ "${REPO_BASE}" == "released" ] ; then
+  cp ${WORK_DIR}/packagelists-rawhide/* ${PACKAGELIST_DIR}/
+  rm -f ${PACKAGELIST_DIR}/*.yaml
+  rm -f ${PACKAGELIST_DIR}/*Buildroot*
+else
+  for this_arch in ${ARCH_LIST[@]}
+  do
+    echo "Downloading package lists for ${this_arch}"
+    wget -q -O ${PACKAGELIST_DIR}/Packages.${this_arch} ${URL_BASE}view-binary-package-name-list--view-${VIEW}--${this_arch}.txt
+    wget -q -O ${PACKAGELIST_DIR}/Sources.${this_arch} ${URL_BASE}view-source-package-name-list--view-${VIEW}--${this_arch}.txt
+    wget -q -O ${PACKAGELIST_DIR}/Package-NVRs.${this_arch} ${URL_BASE}view-binary-package-list--view-${VIEW}--${this_arch}.txt
+    wget -q -O ${PACKAGELIST_DIR}/Source-NVRs.${this_arch} ${URL_BASE}view-source-package-list--view-${VIEW}--${this_arch}.txt
+  	sort -u -o ${PACKAGELIST_DIR}/Packages.${this_arch} ${PACKAGELIST_DIR}/Packages.${this_arch}
+  	sort -u -o ${PACKAGELIST_DIR}/Sources.${this_arch} ${PACKAGELIST_DIR}/Sources.${this_arch}
+  	sort -u -o ${PACKAGELIST_DIR}/Package-NVRs.${this_arch} ${PACKAGELIST_DIR}/Package-NVRs.${this_arch}
+  	sort -u -o ${PACKAGELIST_DIR}/Source-NVRs.${this_arch} ${PACKAGELIST_DIR}/Source-NVRs.${this_arch}
+  	cat ${PACKAGELIST_DIR}/Packages.${this_arch} >> ${PACKAGELIST_DIR}/Packages.all-arches
+  	cat ${PACKAGELIST_DIR}/Sources.${this_arch} >> ${PACKAGELIST_DIR}/Sources.all-arches
+  	cat ${PACKAGELIST_DIR}/Package-NVRs.${this_arch} >> ${PACKAGELIST_DIR}/Package-NVRs.all-arches
+  	cat ${PACKAGELIST_DIR}/Source-NVRs.${this_arch} >> ${PACKAGELIST_DIR}/Source-NVRs.all-arches
+  done
+  sort -u -o ${PACKAGELIST_DIR}/Packages.all-arches ${PACKAGELIST_DIR}/Packages.all-arches
+  sort -u -o ${PACKAGELIST_DIR}/Sources.all-arches ${PACKAGELIST_DIR}/Sources.all-arches
+  sort -u -o ${PACKAGELIST_DIR}/Package-NVRs.all-arches ${PACKAGELIST_DIR}/Package-NVRs.all-arches
+  sort -u -o ${PACKAGELIST_DIR}/Source-NVRs.all-arches ${PACKAGELIST_DIR}/Source-NVRs.all-arches
+fi
 
 # Generate the initial buildroot
 ./buildroot-generator -r ${REPO_BASE} -p ${PACKAGELIST_DIR}
