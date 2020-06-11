@@ -113,19 +113,19 @@ if ! [ "${REPO_BASE}" == "released" ] ; then
   done
 
   # Upload to feedback-pipeline
-  if ! [ -d ${GIT_DIR}/feedback-pipeline-config ] ; then
+  if ! [ -d ${GIT_DIR}/content-resolver-input ] ; then
     mkdir -p ${GIT_DIR}
     cd ${GIT_DIR}
-    git clone git@github.com:minimization/feedback-pipeline-config.git
+    git clone git@github.com:minimization/content-resolver-input.git
   fi
-  if ! [ -d ${GIT_DIR}/feedback-pipeline-config ] ; then
+  if ! [ -d ${GIT_DIR}/content-resolver-input ] ; then
   	echo
   	echo "You do not seem to have correct credentials for the git repo"
   	echo "Exiting so you do no harm"
   	echo
   	exit 5
   fi
-  cd ${GIT_DIR}/feedback-pipeline-config/configs
+  cd ${GIT_DIR}/content-resolver-input/configs
   git pull
   cp ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml .
   git add ${VIEW}-buildroot-workload.yaml
