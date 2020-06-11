@@ -1,0 +1,139 @@
+#!/bin/bash
+# Given a source rpm NVR, gather all the package information
+#  for all the arches.
+#
+
+WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source $WORK_DIR/conf/config.inc
+
+
+###################
+# Common Variables
+###################
+HTML_FILE="${PACKAGE_DIR_BASE}/index.html"
+PACKAGE_LIST="$(ls -1 ${PACKAGE_DIR_BASE} | grep -v -e data)"
+REPO_LIST="released rawhide eln"
+CGOOD="#00FF00"
+CNOBUILD="#00FFFF"
+CWARN="#FFFFCC"
+CBAD="#FFFFFF"
+
+###################
+# Create Header
+###################
+rm -f ${HTML_FILE}
+
+echo "<html>" >> ${HTML_FILE}
+echo "<head><title>Dep Compare</title></head>" >> ${HTML_FILE}
+echo "<body>" >> ${HTML_FILE}
+echo "<h1>Dependency Comparison Among Repos</h1>" >> ${HTML_FILE}
+for this_repo in $(echo ${REPO_LIST})
+do
+  echo "<a href=\"index-${this_repo}.html\">${this_repo}</a> " >> ${HTML_FILE}  
+done
+echo "<br>Page updated: $(date)" >> ${HTML_FILE}
+echo "<br><hr><br>" >> ${HTML_FILE}
+
+###################
+# Create Main Content
+###################
+echo "<table border=1 style=width:100%>" >> ${HTML_FILE}
+echo "<tr><th>Name</th><th>RELEASED</th><th>vs</th><th>RAWHIDE</th><th>vs</th><th>ELN</th></tr>"  >> ${HTML_FILE}
+
+# Do this one at a time so everything is in order
+for this_package in $(echo ${PACKAGE_LIST})
+do
+  if [ -d ${PACKAGE_DIR_BASE}/${this_package} ] && ls -d ${PACKAGE_DIR_BASE}/${this_package}/*latest >/dev/null 2>&1 ; then
+    echo "  ${this_package}"
+    overall_status="same"
+    rvr_status="same"
+    rve_status="same"
+    released_nvr="NO-BUILD"
+    rawhide_nvr="NO-BUILD"
+    eln_nvr="NO-BUILD"
+    this_package_dir="${PACKAGE_DIR_BASE}/${this_package}"
+    
+    # Release vs Rawhide
+    if [ -d ${this_package_dir}/released-latest ] ; then
+      released_nvr="$(cat ${this_package_dir}/released-latest/source-nvr.txt)"
+      if [ -d ${this_package_dir}/rawhide-latest ] ; then
+        rawhide_nvr="$(cat ${this_package_dir}/rawhide-latest/source-nvr.txt)"
+	if ! diff -q ${this_package_dir}/rawhide-latest/source-deps.txt ${this_package_dir}/released-latest/source-deps.txt ; then
+	  rvr_status="S$(echo ${rvr_status} | sed 's/same//')"
+	fi
+	if ! diff -q ${this_package_dir}/rawhide-latest/binary-deps.txt ${this_package_dir}/released-latest/binary-deps.txt ; then
+	  rvr_status="$(echo ${rvr_status} | sed 's/same//')B"
+	fi
+      else
+        rvr_status="nobuild"
+      fi
+    else
+      # Overall status is not affected if there is no released package
+      rvr_status="nobuild"
+      if [ -d ${this_package_dir}/rawhide-latest ] ; then
+        rawhide_nvr="$(cat ${this_package_dir}/rawhide-latest/source-nvr.txt)"
+      fi
+    fi
+    
+    # ELN vs Rawhide
+    if [ -d ${this_package_dir}/eln-latest ] ; then
+      eln_nvr="$(cat ${this_package_dir}/released-latest/source-nvr.txt)"
+      if [ -d ${this_package_dir}/rawhide-latest ] ; then
+	if ! diff -q ${this_package_dir}/rawhide-latest/source-deps.txt ${this_package_dir}/eln-latest/source-deps.txt ; then
+	  rve_status="S$(echo ${rvr_status} | sed 's/same//')"
+	  overall_status="S$(echo ${rvr_status} | sed 's/same//')"
+	fi
+	if ! diff -q ${this_package_dir}/rawhide-latest/binary-deps.txt ${this_package_dir}/eln-latest/binary-deps.txt ; then
+	  rve_status="$(echo ${rvr_status} | sed 's/same//')B"
+	  overall_status="$(echo ${rvr_status} | sed 's/same//')B"
+	fi
+      else
+        overall_status="nobuild"
+        rve_status="nobuild"
+      fi
+    else
+      overall_status="nobuild"
+      rve_status="nobuild"
+    fi
+    
+    #Colors
+    overall_color="${CWARN}"
+    rvr_color="${CWARN}"
+    rve_color="${CWARN}"
+    if [ "${overall_status}" == "same" ] ; then
+      overall_color="${CGOOD}"
+    elif [ "${overall_status}" == "nobuild" ] ; then
+      overall_color="${CNOBUILD}"
+    fi
+    if [ "${rvr_status}" == "same" ] ; then
+      rvr_color="${CGOOD}"
+    elif [ "${rvr_status}" == "nobuild" ] ; then
+      rvr_color="${CNOBUILD}"
+    fi
+    if [ "${rve_status}" == "same" ] ; then
+      rve_color="${CGOOD}"
+    elif [ "${rve_status}" == "nobuild" ] ; then
+      rve_color="${CNOBUILD}"
+    fi
+    
+    
+    # Write is all out
+    echo "  <tr><td bgcolor=\"${overall_color}\"><b>${this_package}</b></td>" >> ${HTML_FILE}
+    echo "    <td><a href=\"${this_package}/${released_nvr}/index.html\">${released_nvr}</a></td>" >> ${HTML_FILE}
+    echo "    <td bgcolor=\"${rvr_color}\"><b>${rvr_status}</b></td>" >> ${HTML_FILE}
+    echo "    <td><a href=\"${this_package}/${rawhide_nvr}/index.html\">${rawhide_nvr}</a></td>" >> ${HTML_FILE}
+    echo "    <td bgcolor=\"${rve_color}\"><b>${rve_status}</b></td>" >> ${HTML_FILE}
+    echo "    <td><a href=\"${this_package}/${eln_nvr}/index.html\">${eln_nvr}</a></td>" >> ${HTML_FILE}
+    echo "  </tr>" >> ${HTML_FILE}
+  fi
+done
+
+
+###################
+# Create footer
+###################
+
+echo "</body>" >> ${HTML_FILE}
+echo "</html>" >> ${HTML_FILE}
+
+exit 0
