@@ -58,10 +58,10 @@ do
       released_nvr="$(cat ${this_package_dir}/released-latest/source-nvr.txt)"
       if [ -d ${this_package_dir}/rawhide-latest ] ; then
         rawhide_nvr="$(cat ${this_package_dir}/rawhide-latest/source-nvr.txt)"
-	if ! diff -q ${this_package_dir}/rawhide-latest/source-deps.txt ${this_package_dir}/released-latest/source-deps.txt ; then
+	if ! diff -q ${this_package_dir}/rawhide-latest/source-deps.txt ${this_package_dir}/released-latest/source-deps.txt >/dev/null 2>&1 ; then
 	  rvr_status="S$(echo ${rvr_status} | sed 's/same//')"
 	fi
-	if ! diff -q ${this_package_dir}/rawhide-latest/binary-deps.txt ${this_package_dir}/released-latest/binary-deps.txt ; then
+	if ! diff -q ${this_package_dir}/rawhide-latest/binary-deps.txt ${this_package_dir}/released-latest/binary-deps.txt >/dev/null 2>&1 ; then
 	  rvr_status="$(echo ${rvr_status} | sed 's/same//')B"
 	fi
       else
@@ -79,11 +79,11 @@ do
     if [ -d ${this_package_dir}/eln-latest ] ; then
       eln_nvr="$(cat ${this_package_dir}/released-latest/source-nvr.txt)"
       if [ -d ${this_package_dir}/rawhide-latest ] ; then
-	if ! diff -q ${this_package_dir}/rawhide-latest/source-deps.txt ${this_package_dir}/eln-latest/source-deps.txt ; then
+	if ! diff -q ${this_package_dir}/rawhide-latest/source-deps.txt ${this_package_dir}/eln-latest/source-deps.txt >/dev/null 2>&1 ; then
 	  rve_status="S$(echo ${rvr_status} | sed 's/same//')"
 	  overall_status="S$(echo ${rvr_status} | sed 's/same//')"
 	fi
-	if ! diff -q ${this_package_dir}/rawhide-latest/binary-deps.txt ${this_package_dir}/eln-latest/binary-deps.txt ; then
+	if ! diff -q ${this_package_dir}/rawhide-latest/binary-deps.txt ${this_package_dir}/eln-latest/binary-deps.txt >/dev/null 2>&1 ; then
 	  rve_status="$(echo ${rvr_status} | sed 's/same//')B"
 	  overall_status="$(echo ${rvr_status} | sed 's/same//')B"
 	fi
