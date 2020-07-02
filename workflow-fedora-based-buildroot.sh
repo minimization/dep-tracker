@@ -15,7 +15,7 @@
 WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source ${WORK_DIR}/conf/config.inc
 
-BAD_PACKAGES=(nodejs-find-up nodejs-grunt-contrib-uglify nodejs-http-errors nodejs-json-diff nodejs-load-grunt-tasks nodejs-locate-path nodejs-pkg-up nodejs-p-locate nodejs-raw-body nodejs-closure-compiler texlive-collection-latexrecommended texlive-fancyvrb texlive-pstricks texlive-biblatex texlive-xmltex texlive-l3kernel texlive-xetex texlive-dvipdfmx texlive-collection-basic texinfo-tex nodejs-rollup nodejs-js-yaml nodejs-tap-parser uglify-js nodejs-with nodejs-jade mocha nodejs-promises-aplus-tests nodejs-css-stringify nodejs-css)
+BAD_PACKAGES=(nodejs-find-up nodejs-grunt-contrib-uglify nodejs-http-errors nodejs-json-diff nodejs-load-grunt-tasks nodejs-locate-path nodejs-pkg-up nodejs-p-locate nodejs-raw-body nodejs-closure-compiler texlive-collection-latexrecommended texlive-fancyvrb texlive-pstricks texlive-biblatex texlive-xmltex texlive-l3kernel texlive-xetex texlive-dvipdfmx texlive-collection-basic texinfo-tex nodejs-rollup nodejs-js-yaml nodejs-tap-parser uglify-js nodejs-with nodejs-jade mocha nodejs-promises-aplus-tests nodejs-css-stringify nodejs-css nodejs-tape nodejs-tap nodejs-resumer nodejs-proxyquire nodejs-nopt nodeunit)
 PACKAGELIST_DIR="${WORK_DIR}/packagelists-${REPO_BASE}"
 URL_BASE="https://tiny.distro.builders/"
 if [ "${REPO_BASE}" == "rawhide" ] ; then
