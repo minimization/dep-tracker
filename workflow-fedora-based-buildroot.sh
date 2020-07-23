@@ -15,7 +15,10 @@
 WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source ${WORK_DIR}/conf/config.inc
 
-BAD_PACKAGES=(nodejs-find-up nodejs-grunt-contrib-uglify nodejs-http-errors nodejs-json-diff nodejs-load-grunt-tasks nodejs-locate-path nodejs-pkg-up nodejs-p-locate nodejs-raw-body nodejs-closure-compiler texlive-collection-latexrecommended texlive-fancyvrb texlive-pstricks texlive-biblatex texlive-xmltex texlive-l3kernel texlive-xetex texlive-dvipdfmx texlive-collection-basic texinfo-tex nodejs-rollup nodejs-js-yaml nodejs-tap-parser uglify-js nodejs-with nodejs-jade mocha nodejs-promises-aplus-tests nodejs-css-stringify nodejs-css nodejs-tape nodejs-tap nodejs-resumer nodejs-proxyquire nodejs-nopt nodeunit)
+TIMESTAMP=$(date +%Y-%m-%d-%H:%M)
+
+BAD_PACKAGES=()
+#BAD_PACKAGES=(nodejs-find-up nodejs-grunt-contrib-uglify nodejs-http-errors nodejs-json-diff nodejs-load-grunt-tasks nodejs-locate-path nodejs-pkg-up nodejs-p-locate nodejs-raw-body nodejs-closure-compiler texlive-collection-latexrecommended texlive-fancyvrb texlive-pstricks texlive-biblatex texlive-xmltex texlive-l3kernel texlive-xetex texlive-dvipdfmx texlive-collection-basic texinfo-tex nodejs-rollup nodejs-js-yaml nodejs-tap-parser uglify-js nodejs-with nodejs-jade mocha nodejs-promises-aplus-tests nodejs-css-stringify nodejs-css nodejs-tape nodejs-tap nodejs-resumer nodejs-proxyquire nodejs-nopt nodeunit)
 PACKAGELIST_DIR="${WORK_DIR}/packagelists-${REPO_BASE}"
 URL_BASE="https://tiny.distro.builders/"
 if [ "${REPO_BASE}" == "rawhide" ] ; then
@@ -62,7 +65,26 @@ else
 fi
 
 # Generate the initial buildroot
-./buildroot-generator -r ${REPO_BASE} -p ${PACKAGELIST_DIR}
+#./buildroot-generator -r ${REPO_BASE} -p ${PACKAGELIST_DIR}
+## New style buildroot
+# Cleanup for the buildroot
+for this_arch in ${ARCH_LIST[@]}
+do
+  DATA_DIR="${DATA_DIR_BASE}/${this_arch}/${NEW_DIR}"
+  rm -rf ${DATA_DIR}/*
+  mkdir -p ${DATA_DIR}/{errors,output}
+  echo "${TIMESTAMP}" > ${DATA_DIR}/${BR_TIMESTAMP_FILENAME}
+done
+# generate buildroot
+printf '%s\n' "${ARCH_LIST[@]}" | xargs --max-procs=4 -I THIS_ARCH \
+       python buildroot-generator.py THIS_ARCH ${REPO_BASE}
+# Massage Data
+for this_arch in ${ARCH_LIST[@]}
+do
+  DATA_DIR="${DATA_DIR_BASE}/${this_arch}/${NEW_DIR}"
+  cat ${DATA_DIR}/output/*deps-source ${DATA_DIR}/CoreBuildRootSources | sort -u -o ${DATA_DIR}/${BR_SOURCE_PKGNAMES_FILENAME}
+done
+
 
 # Take the initial buildroot and create archful source repos
 ./identify-archful-srpms -r ${REPO_BASE}
@@ -72,25 +94,44 @@ fi
 #   Not written yet, cuz it's optional
 
 # Generate the final buildroot using the archful source repos
-./buildroot-generator -r ${REPO_BASE}-archful-source -p ${PACKAGELIST_DIR}
+#./buildroot-generator -r ${REPO_BASE}-archful-source -p ${PACKAGELIST_DIR}
+## New style buildroot
+# Cleanup for the buildroot
+for this_arch in ${ARCH_LIST[@]}
+do
+  DATA_DIR="${DATA_DIR_BASE}/${this_arch}/${NEW_DIR}"
+  rm -rf ${DATA_DIR}/*
+  mkdir -p ${DATA_DIR}/{errors,output}
+  echo "${TIMESTAMP}" > ${DATA_DIR}/${BR_TIMESTAMP_FILENAME}
+done
+# generate buildroot
+printf '%s\n' "${ARCH_LIST[@]}" | xargs --max-procs=4 -I THIS_ARCH \
+       python buildroot-generator.py THIS_ARCH ${REPO_BASE}-archful-source
+# Massage Data
+for this_arch in ${ARCH_LIST[@]}
+do
+  DATA_DIR="${DATA_DIR_BASE}/${this_arch}/${NEW_DIR}"
+  cat ${DATA_DIR}/output/*deps-source ${DATA_DIR}/CoreBuildRootSources | sort -u -o ${DATA_DIR}/${BR_SOURCE_PKGNAMES_FILENAME}
+  cat ${DATA_DIR}/output/*deps-binary ${DATA_DIR}/CoreBuildRootBinaries | sort -u -o ${DATA_DIR}/${BR_BINARY_PKGNAMES_FILENAME}
+done
 
 
 ## Create buildroot workload and upload it to feedback-pipeline
 
 # Determine binary packages added, and which are arch specific
 rm -f ${PACKAGELIST_DIR}/Packages.Binary.Buildroot.tmp
-rm -f ${PACKAGELIST_DIR}/Packages.Source.Buildroot.NVR.all-arches
+rm -f ${PACKAGELIST_DIR}/Packages.Source.Buildroot.Names.all-arches
 for this_arch in ${ARCH_LIST[@]}
 do
   DATA_DIR="${DATA_DIR_BASE}/${this_arch}"
-  comm -13 ${DATA_DIR}/${NEW_DIR}/Packages.${this_arch} ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt | sort -u -o ${DATA_DIR}/${NEW_DIR}/added-binary-package-names.txt
+  comm -13 ${PACKAGELIST_DIR}/Packages.${this_arch} ${DATA_DIR}/${NEW_DIR}/${BR_BINARY_PKGNAMES_FILENAME} | sort -u -o ${DATA_DIR}/${NEW_DIR}/added-binary-package-names.txt
   cat ${DATA_DIR}/${NEW_DIR}/added-binary-package-names.txt >> ${PACKAGELIST_DIR}/Packages.added.tmp
-  cat ${DATA_DIR}/${NEW_DIR}/buildroot-binary-package-names.txt >> ${PACKAGELIST_DIR}/Packages.Binary.Buildroot.tmp
-  cat ${DATA_DIR}/${NEW_DIR}/buildroot-source-package-nvrs.txt >> ${PACKAGELIST_DIR}/Packages.Source.Buildroot.NVR.all-arches
+  cat ${DATA_DIR}/${NEW_DIR}/${BR_BINARY_PKGNAMES_FILENAME} >> ${PACKAGELIST_DIR}/Packages.Binary.Buildroot.tmp
+  cat ${DATA_DIR}/${NEW_DIR}/${BR_SOURCE_PKGNAMES_FILENAME} >> ${PACKAGELIST_DIR}/Packages.Source.Buildroot.Names.all-arches
 done
 cat ${PACKAGELIST_DIR}/Packages.added.tmp | sort | uniq -cd | sed -n -e 's/^ *4 \(.*\)/\1/p' | sort -u -o ${PACKAGELIST_DIR}/Packages.added.common
 cat ${PACKAGELIST_DIR}/Packages.Binary.Buildroot.tmp | sort | uniq -cd | sed -n -e 's/^ *4 \(.*\)/\1/p' | sort -u -o ${PACKAGELIST_DIR}/Packages.Binary.Buildroot.common
-sort -u -o ${PACKAGELIST_DIR}/Packages.Source.Buildroot.NVR.all-arches ${PACKAGELIST_DIR}/Packages.Source.Buildroot.NVR.all-arches
+sort -u -o ${PACKAGELIST_DIR}/Packages.Source.Buildroot.Names.all-arches ${PACKAGELIST_DIR}/Packages.Source.Buildroot.Names.all-arches
 
 if ! [ "${REPO_BASE}" == "released" ] ; then
   # Generate the buildroot workload
