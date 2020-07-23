@@ -79,7 +79,7 @@ download_source_rpms() {
   local src_dl_arch=${ARCH_LIST[0]}
 
   echo "Downloading SRPMs."
-  local DNF_OPTIONS="--quiet --forcearch=${src_dl_arch} ${DNF_OPTIONS_SOURCE_ONLY}"
+  local DNF_OPTIONS="--quiet --forcearch=${src_dl_arch} -c ${REPO_DIR}/${REPONAME}.${this_arch}.repo ${DNF_OPTIONS_NOCONF_BASE}"
   # add --skip-broken because source repo isn't always up to date with binary repos
   DNF_OPTIONS="--skip-broken ${DNF_OPTIONS}"
   dnf ${DNF_OPTIONS} download --downloaddir "${srpm_dir}" --source "${pkg_list[@]}"
