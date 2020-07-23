@@ -1,28 +1,23 @@
 [main]
 cachedir=CACHE-DIR
-exclude=generic-release* fedora-release-x* fedora-release-w* fedora-release-s* fedora-release-m* fedora-release-k* fedora-release-i* fedora-release-cinnamon fedora-release-cloud fedora-release-container fedora-release-coreos coreutils-single *curl-minimal compat-openssl* libgit2_0* js-jquery1 js-jquery2
 
 [dt-main]
 name=Fedora Rawhide
 baseurl=https://kojipkgs.fedoraproject.org/compose/rawhide/latest-Fedora-Rawhide/compose/Everything/$basearch/os/
 enabled=1
 gpgcheck=0
+priority=2000
 
 [dt-main-source]
-name=Fedora Rawhide - Source
+name=Local Archful Source
 baseurl=file://BASE-DIR/repos/new/$basearch/
 enabled=1
 gpgcheck=0
+priority=1
 
-[dt-modular]
-name=Fedora Modular 
-metalink=https://mirrors.fedoraproject.org/metalink?repo=fedora-modular-$releasever&arch=$basearch
-enabled=0
+[dt-rawhide-source]
+name=Fedora Rawhide - Source
+baseurl=https://kojipkgs.fedoraproject.org/compose/rawhide/latest-Fedora-Rawhide/compose/Everything/source/tree/
+enabled=1
 gpgcheck=0
-
-
-[dt-modular-source]
-name=Fedora Modular - Source
-metalink=https://mirrors.fedoraproject.org/metalink?repo=fedora-modular-source-$releasever&arch=$basearch
-enabled=0
-gpgcheck=0
+priority=91

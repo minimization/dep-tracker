@@ -1,15 +1,30 @@
 [main]
 cachedir=CACHE-DIR
-exclude=generic-release* fedora-release-x* fedora-release-w* fedora-release-s* fedora-release-m* fedora-release-k* fedora-release-i* fedora-release-cinnamon fedora-release-cloud fedora-release-container fedora-release-coreos coreutils-single *curl-minimal compat-openssl* libgit2_0* js-jquery1 js-jquery2
 
 [dt-main]
 name=Fedora ELN
 baseurl=https://odcs.fedoraproject.org/composes/production/latest-Fedora-ELN/compose/Everything/$basearch/os/
 enabled=1
 gpgcheck=0
+priority=2000
 
 [dt-main-source]
 name=Fedora ELN - Source
 baseurl=https://odcs.fedoraproject.org/composes/production/latest-Fedora-ELN/compose/Everything/source/tree/
 enabled=1
 gpgcheck=0
+priority=2001
+
+[dt-rawhide]
+name=Fedora Rawhide
+baseurl=https://kojipkgs.fedoraproject.org/compose/rawhide/latest-Fedora-Rawhide/compose/Everything/$basearch/os/
+enabled=1
+gpgcheck=0
+priority=90
+
+[dt-rawhide-source]
+name=Fedora Rawhide - Source
+baseurl=https://kojipkgs.fedoraproject.org/compose/rawhide/latest-Fedora-Rawhide/compose/Everything/source/tree/
+enabled=1
+gpgcheck=0
+priority=91
