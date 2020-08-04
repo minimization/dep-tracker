@@ -110,7 +110,7 @@ while 0 < len(listSourcesQueue):
   pkgs = base.sack.query().available().filter(
       name=(this_package), arch="src").latest().run()
   if not pkgs:
-      raise dnf.exceptions.Error(('no package matched: %s') % this_package)
+      print(('no package matched: %s') % this_package)
   ## Find the BuildRequires needed to build the source
   for pkg in pkgs:
       #print("  " + pkg.name)
