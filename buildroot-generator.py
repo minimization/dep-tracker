@@ -53,6 +53,7 @@ baseCore.conf.read(repoConfDir + repoName + "." + arch + ".repo")
 baseCore.conf.substitutions['releasever'] = releasever
 baseCore.conf.installroot = installroot
 baseCore.conf.arch = arch
+baseCore.conf.install_weak_deps = False
 baseCore.repos.enable_source_repos()
 
 #print(" Start read repos")
