@@ -17,7 +17,7 @@ source ${WORK_DIR}/conf/config.inc
 
 TIMESTAMP=$(date +%Y-%m-%d-%H:%M)
 
-BAD_PACKAGES=(python3-pytest-relaxed python3-pytest4 kernel-headers kernel-tools ocaml-findlib cppcheck opencv-core ocaml-ppx-tools-versioned-devel ocaml-ppx-tools-versioned ocaml-migrate-parsetree-devel ocaml-migrate-parsetree ocaml-findlib-devel ocaml-bisect-ppx-devel ocaml-bisect-ppx jffi-native jffi jnr-ffi jython jnr-netdb)
+BAD_PACKAGES=(python3-pytest-relaxed python3-pytest4 kernel-headers kernel-tools python3-pywbem)
 PACKAGELIST_DIR="${WORK_DIR}/packagelists-${REPO_BASE}"
 URL_BASE="https://tiny.distro.builders/"
 if [ "${REPO_BASE}" == "rawhide" ] ; then
