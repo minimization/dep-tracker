@@ -17,7 +17,7 @@ source ${WORK_DIR}/conf/config.inc
 
 TIMESTAMP=$(date +%Y-%m-%d-%H:%M)
 
-BAD_PACKAGES=(python3-pytest-relaxed python3-pytest4 kernel-headers kernel-tools python3-pywbem)
+BAD_PACKAGES=(python3-pytest-relaxed python3-pytest4 kernel-headers kernel-tools python3-pywbem rubygem-railties rubygem-sass-rails)
 PACKAGELIST_DIR="${WORK_DIR}/packagelists-${REPO_BASE}"
 URL_BASE="https://tiny.distro.builders/"
 if [ "${REPO_BASE}" == "rawhide" ] ; then
@@ -70,7 +70,8 @@ fi
 for this_arch in ${ARCH_LIST[@]}
 do
   DATA_DIR="${DATA_DIR_BASE}/${this_arch}/${NEW_DIR}"
-  rm -rf ${DATA_DIR}/*
+  rm -rf ${DATA_DIR_BASE}/${this_arch}/${LAST_DIR}
+  mv ${DATA_DIR} ${DATA_DIR_BASE}/${this_arch}/${LAST_DIR}
   mkdir -p ${DATA_DIR}/{errors,output}
   echo "${TIMESTAMP}" > ${DATA_DIR}/${BR_TIMESTAMP_FILENAME}
 done
