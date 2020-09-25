@@ -235,7 +235,7 @@ while 0 < len(listSourcesQueue):
 
 
 # Dumping package dependency data
-view_id = "view-eln"
+view_id = "view-" + repoBase
 filename = "buildroot-package-relations--{view_id}--{arch}.json".format(
     view_id=view_id,
     arch=arch
