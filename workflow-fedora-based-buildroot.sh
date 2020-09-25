@@ -212,11 +212,10 @@ if ! [ "${REPO_BASE}" == "released" ] ; then
   cp ${PACKAGELIST_DIR}/buildroot-${VIEW}.yaml .
   git add buildroot-${VIEW}.yaml
   git commit -m "Update buildroot-${VIEW}.yaml $(date +%Y-%m-%d-%H:%M)"
-  cd ${GIT_DIR}/content-resolver-input/relations
   for this_arch in ${ARCH_LIST[@]}
   do
     DATA_DIR="${DATA_DIR_BASE}/${this_arch}/${NEW_DIR}"
-    cp ${DATA_DIR}/buildroot-package-relations--${this_arch}.json .
+    cp ${DATA_DIR}/buildroot-package-relations--view-${VIEW}--${this_arch}.json .
   done
   git add buildroot-package-relations*
   git commit -m "Update buildroot-package-relations json $(date +%Y-%m-%d-%H:%M)"
