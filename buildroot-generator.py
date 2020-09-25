@@ -46,6 +46,62 @@ coreBuildRoot = ['bash', 'bzip2', 'coreutils', 'cpio', 'diffutils', 'fedora-rele
 coreBuildRootBinaries = []
 coreBuildRootSources = []
 
+# Package dependency data
+binary_pkg_relations = {}
+
+# Analyzes package relations and outputs graph data
+# representing package to package dependency relations
+# within given DNF query
+def _analyze_package_relations(dnf_query):
+    relations = {}
+
+    for pkg in dnf_query:
+        pkg_id = "{name}-{evr}.{arch}".format(
+            name=pkg.name,
+            evr=pkg.evr,
+            arch=pkg.arch
+        )
+        
+        required_by = set()
+        recommended_by = set()
+        suggested_by = set()
+
+        for dep_pkg in dnf_query.filter(requires=pkg.provides):
+            dep_pkg_id = "{name}-{evr}.{arch}".format(
+                name=dep_pkg.name,
+                evr=dep_pkg.evr,
+                arch=dep_pkg.arch
+            )
+            required_by.add(dep_pkg_id)
+
+        for dep_pkg in dnf_query.filter(recommends=pkg.provides):
+            dep_pkg_id = "{name}-{evr}.{arch}".format(
+                name=dep_pkg.name,
+                evr=dep_pkg.evr,
+                arch=dep_pkg.arch
+            )
+            recommended_by.add(dep_pkg_id)
+        
+        for dep_pkg in dnf_query.filter(suggests=pkg.provides):
+            dep_pkg_id = "{name}-{evr}.{arch}".format(
+                name=dep_pkg.name,
+                evr=dep_pkg.evr,
+                arch=dep_pkg.arch
+            )
+            suggested_by.add(dep_pkg_id)
+        
+        relations[pkg_id] = {}
+        relations[pkg_id]["required_by"] = sorted(list(required_by))
+        relations[pkg_id]["recommended_by"] = sorted(list(recommended_by))
+        relations[pkg_id]["suggested_by"] = sorted(list(suggested_by))
+    
+    return relations
+
+# Saves given data as JSON
+def dump_data(path, data):
+    with open(path, 'w') as file:
+        json.dump(data, file)
+
 
 print(arch + ": Setup")
 baseCore = dnf.Base()
@@ -136,7 +192,10 @@ while 0 < len(listSourcesQueue):
         base.resolve()
         ## We were successful fake installing, use this information
         query = base.sack.query().filterm(pkg=base.transaction.install_set)
-        
+
+        # Save package dependency data
+        binary_pkg_relations = _analyze_package_relations(query)
+
         fileBinaryDeps=open(outputDir + "output/" + this_package + "-deps-binary", "a+")
         for pkg in query:
             ## Write the binary to the file
@@ -172,6 +231,14 @@ while 0 < len(listSourcesQueue):
         fileBadDeps.close()
 
     listSourcesDone.append(this_package)
+
+
+# Dumping package dependency data
+filename = "buildroot-package-relations--{arch}.json".format(
+    arch=arch
+)
+filepath = os.path.join(outputDir, filename)
+dump_data(filepath, binary_pkg_relations)
 
 print('')
 print(arch + ": FINAL SOURCES: " + str(len(listSources)))
