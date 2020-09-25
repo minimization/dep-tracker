@@ -13,6 +13,7 @@ import os
 import rpm
 import shutil
 import tempfile
+import json
 
 # Arguments
 parser = argparse.ArgumentParser()
