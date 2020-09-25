@@ -235,11 +235,20 @@ while 0 < len(listSourcesQueue):
 
 
 # Dumping package dependency data
-filename = "buildroot-package-relations--{arch}.json".format(
+view_id = "view-eln"
+filename = "buildroot-package-relations--{view_id}--{arch}.json".format(
+    view_id=view_id,
     arch=arch
 )
 filepath = os.path.join(outputDir, filename)
-dump_data(filepath, binary_pkg_relations)
+file_data = {}
+file_data["document_type"] = "buildroot-binary-relations"
+file_data["version"] = "1"
+file_data["data"] = {}
+file_data["data"]["view_id"] = view_id
+file_data["data"]["arch"] = arch
+file_data["data"]["pkgs"] = binary_pkg_relations
+dump_data(filepath, file_data)
 
 print('')
 print(arch + ": FINAL SOURCES: " + str(len(listSources)))
