@@ -98,6 +98,21 @@ def _analyze_package_relations(dnf_query):
     
     return relations
 
+
+# Updates an existing dictionary target_relations with packages
+# from source_relations
+def _update_package_relations_dict(source_relations, target_relations):
+
+    if not source_relations:
+        return
+    
+    for pkg_id, pkg in source_relations.items():
+        if pkg_id in target_relations:
+            continue
+
+        target_relations[pkg_id] = pkg
+
+
 # Saves given data as JSON
 def dump_data(path, data):
     with open(path, 'w') as file:
@@ -195,7 +210,8 @@ while 0 < len(listSourcesQueue):
         query = base.sack.query().filterm(pkg=base.transaction.install_set)
 
         # Save package dependency data
-        binary_pkg_relations = _analyze_package_relations(query)
+        new_binary_pkg_relations = _analyze_package_relations(query)
+        _update_package_relations_dict(new_binary_pkg_relations, binary_pkg_relations)
 
         fileBinaryDeps=open(outputDir + "output/" + this_package + "-deps-binary", "a+")
         for pkg in query:
