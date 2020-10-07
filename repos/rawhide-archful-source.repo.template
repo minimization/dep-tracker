@@ -5,7 +5,7 @@ name=Fedora Rawhide
 baseurl=https://kojipkgs.fedoraproject.org/compose/rawhide/latest-Fedora-Rawhide/compose/Everything/$basearch/os/
 enabled=1
 gpgcheck=0
-priority=2000
+priority=90
 
 [dt-main-source]
 name=Local Archful Source
@@ -19,4 +19,4 @@ name=Fedora Rawhide - Source
 baseurl=https://kojipkgs.fedoraproject.org/compose/rawhide/latest-Fedora-Rawhide/compose/Everything/source/tree/
 enabled=1
 gpgcheck=0
-priority=91
+priority=2091

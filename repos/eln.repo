@@ -5,25 +5,25 @@ name=Fedora ELN
 baseurl=https://odcs.fedoraproject.org/composes/production/latest-Fedora-ELN/compose/Everything/$basearch/os/
 enabled=1
 gpgcheck=0
-priority=2000
+priority=90
 
 [dt-main-source]
 name=Fedora ELN - Source
 baseurl=https://odcs.fedoraproject.org/composes/production/latest-Fedora-ELN/compose/Everything/source/tree/
 enabled=1
 gpgcheck=0
-priority=2001
+priority=91
 
 [dt-rawhide]
 name=Fedora Rawhide
 baseurl=https://kojipkgs.fedoraproject.org/compose/rawhide/latest-Fedora-Rawhide/compose/Everything/$basearch/os/
 enabled=1
 gpgcheck=0
-priority=90
+priority=2090
 
 [dt-rawhide-source]
 name=Fedora Rawhide - Source
 baseurl=https://kojipkgs.fedoraproject.org/compose/rawhide/latest-Fedora-Rawhide/compose/Everything/source/tree/
 enabled=1
 gpgcheck=0
-priority=91
+priority=2091
