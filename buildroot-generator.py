@@ -206,6 +206,7 @@ while 0 < len(listSourcesQueue):
             for req in pkg.requires:
                 if not str(req) in thisBinaryList:
                     thisBinaryList.append(str(req))
+            break
 
     ## Add all the BuildRequires to the base, to be installed
     for this_binary in thisBinaryList:
