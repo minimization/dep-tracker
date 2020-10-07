@@ -168,12 +168,12 @@ except dnf.exceptions.DepsolveError as e:
 base = baseCore
 print(arch + ": Working on Source Queue")
 while 0 < len(listSourcesQueue):
-    print('.', end='')
-    #print('.', end='', flush=True)
-    #print("DONE: " + str(len(listSourcesDone)) + "  QUEUE: " + str(len(listSourcesQueue))  + " TOTAL: " + str(len(listSources)) + " " + arch)
+    # print('.', end='')
+    # print('.', end='', flush=True)
+    # print("DONE: " + str(len(listSourcesDone)) + "  QUEUE: " + str(len(listSourcesQueue))  + " TOTAL: " + str(len(listSources)) + " " + arch)
     ## Get the source package name
     this_package = listSourcesQueue.pop(0)
-    #print("thepackage: " + this_package)
+    # print("thepackage: " + this_package)
     thisBinaryList = []
     thisSourceList = []
     thisSourceEVR = []
