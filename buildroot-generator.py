@@ -10,6 +10,7 @@ import dnf.rpm.transaction
 import dnf.yum.rpmtrans
 import libdnf.repo
 import os
+import re
 import rpm
 import shutil
 import tempfile
@@ -175,22 +176,36 @@ while 0 < len(listSourcesQueue):
     #print("thepackage: " + this_package)
     thisBinaryList = []
     thisSourceList = []
+    thisSourceEVR = []
     base.reset(goal='true')
     
     ## Get the source as a pkg, from the package name
     # Although in rawhide there should only be one package with that name
     # Treat it as multi-packages, just incase
     pkgs = base.sack.query().available().filter(
-        name=(this_package), arch="src").latest().run()
+        name=(this_package), arch="src").run()
     if not pkgs:
         print(('no package matched: %s') % this_package)
-    ## Find the BuildRequires needed to build the source
+    ## Find the BuildRequires needed to build the correct source
+    # Get list of EVR's
     for pkg in pkgs:
-        #print("  " + pkg.name)
-        for req in pkg.requires:
-            if not str(req) in thisBinaryList:
-                #print("    =>%s" % (str(req)))
-                thisBinaryList.append(str(req))
+        thisSourceEVR.append(str(pkg.evr))
+    # Figure out the best EVR's
+    bestEVR = ""
+    for evr in thisSourceEVR:
+        if re.search( "eln\d\d\d", evr):
+            bestEVR = evr
+            continue
+        elif evr > bestEVR:
+            bestEVR = evr
+    # Get the BuildRequires from the best evr package
+    for pkg in pkgs:
+        # print("  " + pkg.name + " " + pkg.evr)
+        if bestEVR == pkg.evr:
+            # print("    CHOSEN ONE")
+            for req in pkg.requires:
+                if not str(req) in thisBinaryList:
+                    thisBinaryList.append(str(req))
 
     ## Add all the BuildRequires to the base, to be installed
     for this_binary in thisBinaryList:
