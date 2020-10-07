@@ -195,7 +195,7 @@ while 0 < len(listSourcesQueue):
     for evr in thisSourceEVR:
         if re.search( "eln\d\d\d", evr):
             bestEVR = evr
-            continue
+            break
         elif evr > bestEVR:
             bestEVR = evr
     # Get the BuildRequires from the best evr package
