@@ -63,6 +63,9 @@ else
   sort -u -o ${PACKAGELIST_DIR}/Source-NVRs.all-arches ${PACKAGELIST_DIR}/Source-NVRs.all-arches
 fi
 
+# Cleanup Cache
+rm -rf ${CACHE_DIR}/${REPO_BASE}-*
+
 # Generate the initial buildroot
 #./buildroot-generator -r ${REPO_BASE} -p ${PACKAGELIST_DIR}
 ## New style buildroot
