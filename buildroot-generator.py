@@ -45,7 +45,11 @@ listSources = []
 listSourcesDone = []
 listSourcesQueue = open(workDir + "packagelists-" + repoBase + "/Sources.all-arches").read().splitlines()
 #listSourcesQueue =['bash', 'sed']
-coreBuildRoot = ['bash', 'bzip2', 'coreutils', 'cpio', 'diffutils', 'fedora-release', 'findutils', 'gawk', 'glibc-minimal-langpack', 'grep', 'gzip', 'info', 'make', 'patch', 'redhat-rpm-config', 'rpm-build', 'sed', 'shadow-utils', 'tar', 'unzip', 'util-linux', 'which', 'xz']
+coreBuildRoot = ['bash', 'bzip2', 'coreutils', 'cpio', 'diffutils', 'findutils', 'gawk', 'glibc-minimal-langpack', 'grep', 'gzip', 'info', 'make', 'patch', 'redhat-rpm-config', 'rpm-build', 'sed', 'shadow-utils', 'tar', 'unzip', 'util-linux', 'which', 'xz']
+if repoBase == "eln":
+    coreBuildRoot.append("fedora-release-eln")
+else:
+    coreBuildRoot.append("fedora-release")
 coreBuildRootBinaries = []
 coreBuildRootSources = []
 placeholderBinaries = []
@@ -180,31 +184,45 @@ placeholderJsonData = json.loads(requests.get(placeholderURL, allow_redirects=Tr
 for placeholder_source in placeholderJsonData:
     print(arch + ": Placeholder: " + placeholder_source)
     placeholderSources.append(placeholder_source)
+    thisBinaryList = []
+    thisSourceList = []
+    base.reset(goal='true')
     # Source rpm: Create a blank deps-source file, add to lists
     open(outputDir + "output/" + placeholder_source + "-deps-source", "w").close()
     listSources.append(placeholder_source)
     # Dep Binaries: Add to deps-binary file, add to local list for processing
     fileBinaryDeps=open(outputDir + "output/" + placeholder_source + "-deps-binary", "w")
-    for thisBinary in placeholderJsonData[placeholder_source]['build_requires']:
-        placeholderBinaries.append(thisBinary)
-        fileBinaryDeps.write("%s\n" % (thisBinary))
-    fileBinaryDeps.close()
-for this_binary in placeholderBinaries:
+    for this_binary in placeholderJsonData[placeholder_source]['build_requires']:
+        thisBinaryList.append(this_binary)
+        fileBinaryDeps.write("%s\n" % (this_binary))
+        try:
+            base.install(this_binary)
+        except dnf.exceptions.MarkingError:
+            print(arch + ": Placeholder:  Cannot Install: " + this_binary)
     try:
-        base.install(this_binary)
-    except dnf.exceptions.MarkingError:
-        print(arch + ": Placeholder:  Cannot Install: " + this_binary)
-try:
-    base.resolve()
-    query = base.sack.query().filterm(pkg=base.transaction.install_set)
-    for pkg in query:
-        ## Put the source for the binary on the coreBuildRootSources list
-        ##   if it is not already there
-        if not pkg.source_name in listSourcesQueue:
-            listSourcesQueue.append(pkg.source_name)
-except dnf.exceptions.DepsolveError as e:
-    print(arch + ": Placeholder Resolution Error")
-    print(e)
+        base.resolve()
+        query = base.sack.query().filterm(pkg=base.transaction.install_set)
+        # Save package dependency data
+        new_binary_pkg_relations = _analyze_package_relations(query)
+        _update_package_relations_dict(new_binary_pkg_relations, binary_pkg_relations)
+        for pkg in query:
+            ## Write the binary to the file
+            if not pkg.name in coreBuildRootBinaries and not pkg.name in thisBinaryList:
+                fileBinaryDeps.write("%s\n" % (pkg.name))
+            if not pkg.source_name in thisSourceList and not pkg.source_name in coreBuildRootSources:
+                thisSourceList.append(pkg.source_name)
+            ## Put source on the SourceQueue
+            if not pkg.source_name in listSources:
+                listSources.append(pkg.source_name)
+            if not pkg.source_name in listSourcesQueue:
+                listSourcesQueue.append(pkg.source_name)
+    except dnf.exceptions.DepsolveError as e:
+        print(arch + ": Placeholder Resolution Error")
+        print(e)
+    fileBinaryDeps.close()
+    with open(outputDir + "output/" + placeholder_source + "-deps-source", "a+") as fileSourceDeps:
+        for src in thisSourceList:
+            fileSourceDeps.write("%s\n" % (src))
 ## END: placeholder work
 
 print(arch + ": Working on Source Queue")
