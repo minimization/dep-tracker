@@ -8,13 +8,14 @@ import dnf.cli
 import dnf.exceptions
 import dnf.rpm.transaction
 import dnf.yum.rpmtrans
+import json
 import libdnf.repo
 import os
 import re
+import requests
 import rpm
 import shutil
 import tempfile
-import json
 
 # Arguments
 parser = argparse.ArgumentParser()
@@ -47,6 +48,8 @@ listSourcesQueue = open(workDir + "packagelists-" + repoBase + "/Sources.all-arc
 coreBuildRoot = ['bash', 'bzip2', 'coreutils', 'cpio', 'diffutils', 'fedora-release', 'findutils', 'gawk', 'glibc-minimal-langpack', 'grep', 'gzip', 'info', 'make', 'patch', 'redhat-rpm-config', 'rpm-build', 'sed', 'shadow-utils', 'tar', 'unzip', 'util-linux', 'which', 'xz']
 coreBuildRootBinaries = []
 coreBuildRootSources = []
+placeholderBinaries = []
+placeholderSources = []
 
 # Package dependency data
 binary_pkg_relations = {}
@@ -167,14 +170,51 @@ except dnf.exceptions.DepsolveError as e:
     print(e)
   		
 base = baseCore
+
+## BEGIN: placeholder work
+print(arch + ": Working on Placeholders")
+base.reset(goal='true')
+placeholderJsonData = {}
+placeholderURL="https://tiny.distro.builders/view-placeholder-srpm-details--view-eln--x86_64.json"
+placeholderJsonData = json.loads(requests.get(placeholderURL, allow_redirects=True).text)
+for placeholder_source in placeholderJsonData:
+    print(arch + ": Placeholder: " + placeholder_source)
+    placeholderSources.append(placeholder_source)
+    # Source rpm: Create a blank deps-source file, add to lists
+    open(outputDir + "output/" + placeholder_source + "-deps-source", "w").close()
+    listSources.append(placeholder_source)
+    # Dep Binaries: Add to deps-binary file, add to local list for processing
+    fileBinaryDeps=open(outputDir + "output/" + placeholder_source + "-deps-binary", "w")
+    for thisBinary in placeholderJsonData[placeholder_source]['build_requires']:
+        placeholderBinaries.append(thisBinary)
+        fileBinaryDeps.write("%s\n" % (thisBinary))
+    fileBinaryDeps.close()
+for this_binary in placeholderBinaries:
+    try:
+        base.install(this_binary)
+    except dnf.exceptions.MarkingError:
+        print(arch + ": Placeholder:  Cannot Install: " + this_binary)
+try:
+    base.resolve()
+    query = base.sack.query().filterm(pkg=base.transaction.install_set)
+    for pkg in query:
+        ## Put the source for the binary on the coreBuildRootSources list
+        ##   if it is not already there
+        if not pkg.source_name in listSourcesQueue:
+            listSourcesQueue.append(pkg.source_name)
+except dnf.exceptions.DepsolveError as e:
+    print(arch + ": Placeholder Resolution Error")
+    print(e)
+## END: placeholder work
+
 print(arch + ": Working on Source Queue")
 while 0 < len(listSourcesQueue):
-    # print('.', end='')
-    # print('.', end='', flush=True)
-    # print("DONE: " + str(len(listSourcesDone)) + "  QUEUE: " + str(len(listSourcesQueue))  + " TOTAL: " + str(len(listSources)) + " " + arch)
     ## Get the source package name
     this_package = listSourcesQueue.pop(0)
     # print("thepackage: " + this_package)
+    if this_package in placeholderSources:
+        print(arch + ": SKIPPING Placeholder: " + this_package)
+        continue
     thisBinaryList = []
     thisSourceList = []
     thisSourceEVR = []
@@ -186,7 +226,7 @@ while 0 < len(listSourcesQueue):
     pkgs = base.sack.query().available().filter(
         name=(this_package), arch="src").run()
     if not pkgs:
-        print(('no package matched: %s') % this_package)
+        print((arch + ': no package matched: %s') % this_package)
     ## Find the BuildRequires needed to build the correct source
     # Get list of EVR's
     for pkg in pkgs:
@@ -256,7 +296,7 @@ while 0 < len(listSourcesQueue):
     ## We could not install all the BuildRequires, let us know somehow
     except dnf.exceptions.DepsolveError as e:
         print('')
-        print(arch + ": No Resolution for" + this_package)
+        print(arch + ": No Resolution for " + this_package)
         print(e)
         fileBadDeps=open(outputDir + "errors/" + this_package + "-BadDeps", "a+")
         fileBadDeps.write("===============================\n")
