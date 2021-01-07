@@ -142,7 +142,7 @@ if ! [ "${REPO_BASE}" == "released" ] ; then
   echo "Creating: ${VIEW}-buildroot-workload.yaml"
   rm -f ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
   cat ${WORK_DIR}/conf/${VIEW}-buildroot-workload.head >> ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
-  cat ${PACKAGELIST_DIR}/Packages.added.common | awk '{print "        - " $1}' >> ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
+  cat ${PACKAGELIST_DIR}/Packages.added.common | sort -u | awk '{print "        - " $1}' >> ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
   echo "    arch_packages:" >> ${PACKAGELIST_DIR}/${VIEW}-buildroot-workload.yaml
   for this_arch in ${ARCH_LIST[@]}
   do
@@ -168,7 +168,7 @@ if ! [ "${REPO_BASE}" == "released" ] ; then
   do
     echo "    ${this_arch}:"  >> ${PACKAGELIST_DIR}/buildroot-${VIEW}.yaml
     DATA_DIR="${DATA_DIR_BASE}/${this_arch}/${NEW_DIR}"
-    cat ${DATA_DIR}/CoreBuildRootBinaries | awk '{print "      - " $1}' >> ${PACKAGELIST_DIR}/buildroot-${VIEW}.yaml
+    cat ${DATA_DIR}/CoreBuildRootBinaries | sort -u | awk '{print "      - " $1}' >> ${PACKAGELIST_DIR}/buildroot-${VIEW}.yaml
   done
   # Now add the source_packages
   echo "  Adding: source_packages"
@@ -181,7 +181,7 @@ if ! [ "${REPO_BASE}" == "released" ] ; then
     do
       echo "      ${this_package}:"  >> ${PACKAGELIST_DIR}/buildroot-${VIEW}.yaml
       echo "        requires:"  >> ${PACKAGELIST_DIR}/buildroot-${VIEW}.yaml
-      cat ${DATA_DIR}/output/${this_package}-deps-binary | awk '{print "          - " $1}' >> ${PACKAGELIST_DIR}/buildroot-${VIEW}.yaml
+      cat ${DATA_DIR}/output/${this_package}-deps-binary | sort -u | awk '{print "          - " $1}' >> ${PACKAGELIST_DIR}/buildroot-${VIEW}.yaml
     done
   done
   # Now add the failed_buildroot
