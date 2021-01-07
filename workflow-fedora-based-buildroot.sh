@@ -80,7 +80,7 @@ do
 done
 # generate buildroot
 printf '%s\n' "${ARCH_LIST[@]}" | xargs --max-procs=4 -I THIS_ARCH \
-       python buildroot-generator.py THIS_ARCH ${REPO_BASE}
+       python3 buildroot-generator.py THIS_ARCH ${REPO_BASE}
 # Massage Data
 for this_arch in ${ARCH_LIST[@]}
 do
@@ -109,7 +109,7 @@ do
 done
 # generate buildroot
 printf '%s\n' "${ARCH_LIST[@]}" | xargs --max-procs=4 -I THIS_ARCH \
-       python buildroot-generator.py THIS_ARCH ${REPO_BASE}-archful-source
+       python3 buildroot-generator.py THIS_ARCH ${REPO_BASE}-archful-source
 # Massage Data
 for this_arch in ${ARCH_LIST[@]}
 do
