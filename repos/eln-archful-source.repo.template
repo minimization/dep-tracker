@@ -11,5 +11,5 @@ name=Fedora ELN - Source
 baseurl=file://BASE-DIR/repos/new/$basearch/
 enabled=1
 gpgcheck=0
-exclude=kernel-tools kernel-headers rubygems rubygem-json rubygem-minitest rubygem-power_assert rubygem-rake rubygem-rdoc rubygem-test-unit
+exclude=kernel-tools kernel-headers rubygems rubygem-json rubygem-minitest rubygem-power_assert rubygem-rake rubygem-rdoc rubygem-test-unit exim
 
