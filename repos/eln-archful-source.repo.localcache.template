@@ -7,6 +7,7 @@ baseurl=https://odcs.fedoraproject.org/composes/production/latest-Fedora-ELN/com
 enabled=1
 gpgcheck=0
 priority=90
+exclude=exim opensmtpd
 
 [dt-main-source]
 name=Fedora ELN - Source
@@ -14,6 +15,7 @@ baseurl=https://odcs.fedoraproject.org/composes/production/latest-Fedora-ELN/com
 enabled=1
 gpgcheck=0
 priority=91
+exclude=kernel-tools kernel-headers rubygems rubygem-json rubygem-minitest rubygem-power_assert rubygem-rake rubygem-rdoc rubygem-test-unit exim
 
 [dt-rawhide]
 name=Fedora Rawhide
@@ -21,6 +23,7 @@ baseurl=https://kojipkgs.fedoraproject.org/compose/rawhide/latest-Fedora-Rawhide
 enabled=1
 gpgcheck=0
 priority=2090
+exclude=exim opensmtpd
 
 [dt-rawhide-source]
 name=Fedora Rawhide - Source
@@ -28,6 +31,7 @@ baseurl=https://kojipkgs.fedoraproject.org/compose/rawhide/latest-Fedora-Rawhide
 enabled=1
 gpgcheck=0
 priority=2091
+exclude=kernel-tools kernel-headers rubygems rubygem-json rubygem-minitest rubygem-power_assert rubygem-rake rubygem-rdoc rubygem-test-unit exim
 
 [dt-archful-source]
 name=Local ELN Archful - Source
@@ -35,3 +39,5 @@ baseurl=file://BASE-DIR/repos/new/$basearch/
 enabled=1
 gpgcheck=0
 priority=1
+exclude=kernel-tools kernel-headers rubygems rubygem-json rubygem-minitest rubygem-power_assert rubygem-rake rubygem-rdoc rubygem-test-unit exim
+

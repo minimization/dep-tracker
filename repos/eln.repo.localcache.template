@@ -6,6 +6,7 @@ name=Fedora ELN
 baseurl=https://odcs.fedoraproject.org/composes/production/latest-Fedora-ELN/compose/Everything/$basearch/os/
 enabled=1
 gpgcheck=0
+exclude=exim opensmtpd
 
 [dt-main-source]
 name=Fedora ELN - Source
