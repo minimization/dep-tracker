@@ -1,4 +1,4 @@
-./run.sh
+./run.sh $@
 
 # Upload to feedback-pipeline
 if ! [ -d ${GIT_DIR}/content-resolver-input-additional ] ; then
