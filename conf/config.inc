@@ -15,6 +15,7 @@ fi
 # Variables
 #####
 ARCH_LIST=(aarch64 ppc64le s390x x86_64)
+URL_BASE="https://tiny.distro.builders/"
 # DIRS
 CONF_DIR="${WORK_DIR}/conf"
 REPO_DIR="${WORK_DIR}/repos"
