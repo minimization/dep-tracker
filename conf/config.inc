@@ -91,23 +91,19 @@ done
 #####
 if echo ${REPONAME} | grep -q archful-source ; then
   REPO_BASE=$(echo ${REPONAME} | cut -d'-' -f1)
-  if ! [ -s ${REPO_DIR}/${REPONAME}.repo ] ; then
-    cp ${REPO_DIR}/${REPONAME}.repo.template ${REPO_DIR}/${REPONAME}.repo
-    sed -i "s|BASE-DIR|${WORK_DIR}/data-${REPO_BASE}|" ${REPO_DIR}/${REPONAME}.repo
-  fi
 else
   REPO_BASE=${REPONAME}
 fi
 
+# Setup repos from templates, if they haven't already.
 for this_arch in ${ARCH_LIST[@]}
 do
-  if ! [ -s ${REPO_DIR}/${REPONAME}.${this_arch}.repo ] ; then
-    mkdir -p ${CACHE_DIR}/${REPONAME}-${this_arch}
-    cp ${REPO_DIR}/${REPONAME}.repo.localcache.template ${REPO_DIR}/${REPONAME}.${this_arch}.repo
-    sed -i "s|CACHE-DIR|${CACHE_DIR}/${REPONAME}-${this_arch}|" ${REPO_DIR}/${REPONAME}.${this_arch}.repo
-    if echo ${REPONAME} | grep -q archful-source ; then
-      sed -i "s|BASE-DIR|${WORK_DIR}/data-${REPO_BASE}|" ${REPO_DIR}/${REPONAME}.${this_arch}.repo
-    fi
+  if ! [ -s ${REPO_DIR}/${REPO_BASE}.${this_arch}.repo ] ; then
+    cp ${REPO_DIR}/${REPO_BASE}.repo.localcache.template ${REPO_DIR}/${REPO_BASE}.${this_arch}.repo
+    cp ${REPO_DIR}/${REPO_BASE}-archful-source.repo.localcache.template ${REPO_DIR}/${REPO_BASE}-archful-source.${this_arch}.repo
+    sed -i "s|CACHE-DIR|${CACHE_DIR}/${REPO_BASE}-${this_arch}|" ${REPO_DIR}/${REPO_BASE}.${this_arch}.repo
+    sed -i "s|CACHE-DIR|${CACHE_DIR}/${REPO_BASE}-archful-source-${this_arch}|" ${REPO_DIR}/${REPO_BASE}-archful-source.${this_arch}.repo
+    sed -i "s|BASE-DIR|${WORK_DIR}/data-${REPO_BASE}|" ${REPO_DIR}/${REPO_BASE}-archful-source.${this_arch}.repo
   fi
 done
 
@@ -117,7 +113,7 @@ done
 #####
 DATA_DIR_BASE="${WORK_DIR}/data-${REPO_BASE}"
 DNF_OPTIONS_BASE="-c ${REPO_DIR}/${REPONAME}.repo --disablerepo=* --enablerepo=dt-main --enablerepo=dt-main-source -y"
-DNF_OPTIONS_NOCONF_BASE="--disablerepo=* --enablerepo=dt-main --enablerepo=dt-main-source -y"
+DNF_OPTIONS_NOCONF_BASE="--disablerepo=* --enablerepo=dt-* --enablerepo=dt-*-source -y"
 DNF_OPTIONS_SOURCE_ONLY="-c ${REPO_DIR}/${REPONAME}.repo --disablerepo=* --enablerepo=dt-main-source"
 DNF_OPTIONS_BINARY_ONLY="-c ${REPO_DIR}/${REPONAME}.repo --disablerepo=* --enablerepo=dt-main"
 

@@ -34,7 +34,7 @@ arch = args.arch
 
 
 # Configuration
-workDir = "/srv/square1/dep-tracker/"
+workDir = os.getcwd() + "/"
 repoConfDir = workDir + "repos/"
 outputDir = workDir + "data-" + repoBase + "/" + arch + "/new/"
 installroot = "/installroot-" + arch

@@ -59,8 +59,10 @@ rm -rf ${CACHE_DIR}/${REPO_BASE}-*
 for this_arch in ${ARCH_LIST[@]}
 do
   DATA_DIR="${DATA_DIR_BASE}/${this_arch}/${NEW_DIR}"
-  rm -rf ${DATA_DIR_BASE}/${this_arch}/${LAST_DIR}
-  mv ${DATA_DIR} ${DATA_DIR_BASE}/${this_arch}/${LAST_DIR}
+  if [ -d ${DATA_DIR} ] ; then
+    rm -rf ${DATA_DIR_BASE}/${this_arch}/${LAST_DIR}
+    mv ${DATA_DIR} ${DATA_DIR_BASE}/${this_arch}/${LAST_DIR}
+  fi
   mkdir -p ${DATA_DIR}/{errors,output}
   echo "${TIMESTAMP}" > ${DATA_DIR}/${BR_TIMESTAMP_FILENAME}
 done
