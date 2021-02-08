@@ -91,7 +91,8 @@ done
 for this_arch in ${ARCH_LIST[@]}
 do
   DATA_DIR="${DATA_DIR_BASE}/${this_arch}/${NEW_DIR}"
-  rm -rf ${DATA_DIR}/*
+  rm -rf ${DATA_DIR_BASE}/${this_arch}/${LAST_DIR}-pass1
+  mv ${DATA_DIR} ${DATA_DIR_BASE}/${this_arch}/${LAST_DIR}-pass1
   mkdir -p ${DATA_DIR}/{errors,output}
   echo "${TIMESTAMP}" > ${DATA_DIR}/${BR_TIMESTAMP_FILENAME}
 done
