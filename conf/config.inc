@@ -112,8 +112,5 @@ done
 #   That might change with command line options
 #####
 DATA_DIR_BASE="${WORK_DIR}/data-${REPO_BASE}"
-DNF_OPTIONS_BASE="-c ${REPO_DIR}/${REPONAME}.repo --disablerepo=* --enablerepo=dt-main --enablerepo=dt-main-source -y"
 DNF_OPTIONS_NOCONF_BASE="--disablerepo=* --enablerepo=dt-* --enablerepo=dt-*-source -y"
-DNF_OPTIONS_SOURCE_ONLY="-c ${REPO_DIR}/${REPONAME}.repo --disablerepo=* --enablerepo=dt-main-source"
-DNF_OPTIONS_BINARY_ONLY="-c ${REPO_DIR}/${REPONAME}.repo --disablerepo=* --enablerepo=dt-main"
 

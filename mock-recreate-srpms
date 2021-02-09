@@ -68,7 +68,7 @@ mdpolicy=group:primary
 best=1
 
 # repos
-$(cat ${REPO_DIR}/${REPONAME}.repo)
+$(cat ${REPO_DIR}/${REPONAME}.x86_64.repo)
 """
 EOF
 
