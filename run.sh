@@ -73,7 +73,9 @@ printf '%s\n' "${ARCH_LIST[@]}" | xargs --max-procs=4 -I THIS_ARCH \
 for this_arch in ${ARCH_LIST[@]}
 do
   DATA_DIR="${DATA_DIR_BASE}/${this_arch}/${NEW_DIR}"
-  cat ${DATA_DIR}/output/*deps-source ${DATA_DIR}/CoreBuildRootSources | sort -u -o ${DATA_DIR}/${BR_SOURCE_PKGNAMES_FILENAME}
+  ls -1 ${DATA_DIR}/output/*-deps-* | sed "s/-deps-.*//" >> ${DATA_DIR}/${BR_SOURCE_PKGNAMES_FILENAME}
+  cat ${DATA_DIR}/output/*deps-source ${DATA_DIR}/CoreBuildRootSources >> ${DATA_DIR}/${BR_SOURCE_PKGNAMES_FILENAME}
+  sort -u -o ${DATA_DIR}/${BR_SOURCE_PKGNAMES_FILENAME} ${DATA_DIR}/${BR_SOURCE_PKGNAMES_FILENAME}
 done
 
 
@@ -103,7 +105,9 @@ printf '%s\n' "${ARCH_LIST[@]}" | xargs --max-procs=4 -I THIS_ARCH \
 for this_arch in ${ARCH_LIST[@]}
 do
   DATA_DIR="${DATA_DIR_BASE}/${this_arch}/${NEW_DIR}"
-  cat ${DATA_DIR}/output/*deps-source ${DATA_DIR}/CoreBuildRootSources | sort -u -o ${DATA_DIR}/${BR_SOURCE_PKGNAMES_FILENAME}
+  ls -1 ${DATA_DIR}/output/*-deps-* | sed "s/-deps-.*//" >> ${DATA_DIR}/${BR_SOURCE_PKGNAMES_FILENAME}
+  cat ${DATA_DIR}/output/*deps-source ${DATA_DIR}/CoreBuildRootSources >> ${DATA_DIR}/${BR_SOURCE_PKGNAMES_FILENAME}
+  sort -u -o ${DATA_DIR}/${BR_SOURCE_PKGNAMES_FILENAME} ${DATA_DIR}/${BR_SOURCE_PKGNAMES_FILENAME}
   cat ${DATA_DIR}/output/*deps-binary ${DATA_DIR}/CoreBuildRootBinaries | sort -u -o ${DATA_DIR}/${BR_BINARY_PKGNAMES_FILENAME}
 done
 
