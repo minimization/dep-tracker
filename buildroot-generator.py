@@ -16,6 +16,7 @@ import requests
 import rpm
 import shutil
 import tempfile
+from pathlib import Path
 
 # Arguments
 parser = argparse.ArgumentParser()
@@ -31,12 +32,20 @@ if args.repo == "rawhide-archful-source":
 elif args.repo == "eln-archful-source":
     repoBase = "eln"
 arch = args.arch
+if repoBase == "rawhide":
+    BestEVRVAR = "fc\d\d"
+elif repoBase == "eln":
+    BestEVRVAR = "eln\d\d\d"
+else:
+    BestEVRVAR = "el9"
 
 
 # Configuration
 workDir = os.getcwd() + "/"
 repoConfDir = workDir + "repos/"
 outputDir = workDir + "data-" + repoBase + "/" + arch + "/new/"
+Path(outputDir + "errors").mkdir(parents=True, exist_ok=True)
+Path(outputDir + "output").mkdir(parents=True, exist_ok=True)
 installroot = "/installroot-" + arch
 releasever = "33"
 
@@ -155,6 +164,7 @@ try:
     query = baseCore.sack.query().filterm(pkg=baseCore.transaction.install_set)
     fileCoreBuildRootBinaries=open(outputDir + "CoreBuildRootBinaries", "a+")
     fileCoreBuildRootSources=open(outputDir + "CoreBuildRootSources", "a+")
+    fileCoreBuildRootSourcesNVR=open(outputDir + "CoreBuildRootSourcesNVR", "a+")
     for pkg in query:
         ## Put the binaries on the coreBuildRootBinaries list
         if not pkg.name in coreBuildRootBinaries:
@@ -165,10 +175,12 @@ try:
         if not pkg.source_name in coreBuildRootSources:
             coreBuildRootSources.append(pkg.source_name)
             fileCoreBuildRootSources.write("%s\n" % (pkg.source_name))
+            fileCoreBuildRootSourcesNVR.write("%s\n" % (pkg.sourcerpm))
             listSources.append(pkg.source_name)
             listSourcesQueue.append(pkg.source_name)
     fileCoreBuildRootBinaries.close()
     fileCoreBuildRootSources.close()
+    fileCoreBuildRootSourcesNVR.close()
 except dnf.exceptions.DepsolveError as e:
     print("Core BuildRoot Resolution Error")
     print(e)
@@ -190,6 +202,8 @@ for placeholder_source in placeholderJsonData:
     # Source rpm: Create a blank deps-source file, add to lists
     open(outputDir + "output/" + placeholder_source + "-deps-source", "w").close()
     listSources.append(placeholder_source)
+    with open(outputDir + "BuildRootSourcesNVR", "a+") as fileBuildRootSourcesNVR:
+        fileBuildRootSourcesNVR.write("%s-PLACEHOLDER.src.rpm\n" % (placeholder_source))
     # Dep Binaries: Add to deps-binary file, add to local list for processing
     fileBinaryDeps=open(outputDir + "output/" + placeholder_source + "-deps-binary", "w")
     for this_binary in placeholderJsonData[placeholder_source]['build_requires']:
@@ -214,6 +228,8 @@ for placeholder_source in placeholderJsonData:
             ## Put source on the SourceQueue
             if not pkg.source_name in listSources:
                 listSources.append(pkg.source_name)
+                with open(outputDir + "BuildRootSourcesNVR", "a+") as fileBuildRootSourcesNVR:
+                    fileBuildRootSourcesNVR.write("%s\n" % (pkg.sourcerpm))
             if not pkg.source_name in listSourcesQueue:
                 listSourcesQueue.append(pkg.source_name)
     except dnf.exceptions.DepsolveError as e:
@@ -252,19 +268,22 @@ while 0 < len(listSourcesQueue):
     # Figure out the best EVR's
     bestEVR = ""
     for evr in thisSourceEVR:
-        if re.search( "eln\d\d\d", evr):
+        if re.search( BestEVRVAR, evr):
             bestEVR = evr
             break
         elif evr > bestEVR:
             bestEVR = evr
     # Get the BuildRequires from the best evr package
     for pkg in pkgs:
-        # print("  " + pkg.name + " " + pkg.evr)
+        # 
         if bestEVR == pkg.evr:
-            # print("    CHOSEN ONE")
+            #print("    CHOSEN ONE")
+            #print("      " + pkg.name + " " + pkg.evr)
             for req in pkg.requires:
                 if not str(req) in thisBinaryList:
                     thisBinaryList.append(str(req))
+            with open(outputDir + "BuildRootSourcesNVR", "a+") as fileBuildRootSourcesNVR:
+                fileBuildRootSourcesNVR.write("%s-%s\n" % (pkg.name,pkg.evr))
             break
 
     ## Add all the BuildRequires to the base, to be installed
