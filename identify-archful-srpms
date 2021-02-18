@@ -166,7 +166,8 @@ find_archful_source_packages() {
     if [ ! -r "${specpath}" ] ; then
       rpm2cpio ${srpm} | cpio --extract --quiet --unconditional --directory "${srpm_dir}" "${specname}"
       if [ ! -r "${specpath}" ] ; then
-	errexit "Failed to extract SPEC file from ${srpm}!"
+	echo "Failed to extract SPEC file from ${srpm}!"
+	continue
       fi
     fi
 
