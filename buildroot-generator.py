@@ -23,7 +23,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("arch", help="What arch are we using",
         choices=["aarch64", "ppc64le", "s390x", "x86_64"])
 parser.add_argument("repo", help="What repo are we using",
-        choices=["rawhide", "rawhide-archful-source", "eln", "eln-archful-source"])
+        choices=["rawhide", "rawhide-archful-source", "eln", "eln-archful-source", "c9s", "c9s-archful-source"])
 args = parser.parse_args()
 repoName = args.repo
 repoBase = args.repo
@@ -31,6 +31,8 @@ if args.repo == "rawhide-archful-source":
     repoBase = "rawhide"
 elif args.repo == "eln-archful-source":
     repoBase = "eln"
+elif args.repo == "c9s-archful-source":
+    repoBase = "c9s"
 arch = args.arch
 if repoBase == "rawhide":
     BestEVRVAR = "fc\d\d"
@@ -57,8 +59,13 @@ listSourcesQueue = open(workDir + "packagelists-" + repoBase + "/Sources.all-arc
 coreBuildRoot = ['bash', 'bzip2', 'coreutils', 'cpio', 'diffutils', 'findutils', 'gawk', 'glibc-minimal-langpack', 'grep', 'gzip', 'info', 'make', 'patch', 'redhat-rpm-config', 'rpm-build', 'sed', 'shadow-utils', 'tar', 'unzip', 'util-linux', 'which', 'xz']
 if repoBase == "eln":
     coreBuildRoot.append("fedora-release-eln")
+    placeholderURL="https://tiny.distro.builders/view-placeholder-srpm-details--view-eln--x86_64.json"
+elif repoBase == "c9s":
+    coreBuildRoot.append("redhat-release")
+    placeholderURL="http://dell-per930-01.4a2m.lab.eng.bos.redhat.com/content-resolver/view-placeholder-srpm-details--view-c9s--x86_64.json"
 else:
     coreBuildRoot.append("fedora-release")
+    placeholderURL="https://tiny.distro.builders/view-placeholder-srpm-details--view-eln--x86_64.json"
 coreBuildRootBinaries = []
 coreBuildRootSources = []
 placeholderBinaries = []
@@ -191,7 +198,6 @@ base = baseCore
 print(arch + ": Working on Placeholders")
 base.reset(goal='true')
 placeholderJsonData = {}
-placeholderURL="https://tiny.distro.builders/view-placeholder-srpm-details--view-eln--x86_64.json"
 placeholderJsonData = json.loads(requests.get(placeholderURL, allow_redirects=True).text)
 for placeholder_source in placeholderJsonData:
     print(arch + ": Placeholder: " + placeholder_source)
