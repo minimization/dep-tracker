@@ -31,13 +31,23 @@ mapfile -t srpm_list < "${srpm_list_file}"
 # make sure we have just the basenames of the SRPMs
 srpm_basename_list=(${srpm_list[@]##*/})
 
+# Put the correct release in the base
+if [ "${REPO_BASE}" == "rawhide" ] ; then
+  mock_release="fedora-release"
+elif [ "${REPO_BASE}" == "eln" ] ; then
+  mock_release="fedora-release-eln"
+else
+  mock_release="redhat-release"
+fi
+
+
 mock_cfg=${WORK_DIR}/fedora-${release_ver}-srpm.cfg
 
 cat > ${mock_cfg} <<EOF
 config_opts['root'] = 'fedora-$release_ver-srpm'
 config_opts['target_arch'] = 'x86_64'
 config_opts['legal_host_arches'] = ('x86_64')
-config_opts['chroot_setup_cmd'] = 'install bash fedora-release fedpkg gnupg2 git-core redhat-rpm-config rpm-build shadow-utils gawk koji glibc-minimal-langpack rpmdevtools'
+config_opts['chroot_setup_cmd'] = 'install $mock_release bash bzip2 coreutils cpio diffutils findutils gawk glibc-minimal-langpack grep gzip info make patch redhat-rpm-config rpm-build sed shadow-utils tar unzip util-linux which xz'
 config_opts['dist'] = 'fc$vernum'  # only useful for --resultdir variable subst
 config_opts['extra_chroot_dirs'] = [ '/run/lock', ]
 config_opts['releasever'] = '$vernum'
