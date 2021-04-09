@@ -133,9 +133,24 @@ def _update_package_relations_dict(source_relations, target_relations):
     
     for pkg_id, pkg in source_relations.items():
         if pkg_id in target_relations:
-            continue
+            # If it exists, I just need to update the dependency lists
+            required_by_set = set()
+            required_by_set.update(target_relations[pkg_id]["required_by"])
+            required_by_set.update(pkg["required_by"])
+            target_relations[pkg_id]["required_by"] = list(required_by_set)
 
-        target_relations[pkg_id] = pkg
+            recommended_by_set = set()
+            recommended_by_set.update(target_relations[pkg_id]["recommended_by"])
+            recommended_by_set.update(pkg["recommended_by"])
+            target_relations[pkg_id]["recommended_by"] = list(recommended_by_set)
+
+            suggested_by_set = set()
+            suggested_by_set.update(target_relations[pkg_id]["suggested_by"])
+            suggested_by_set.update(pkg["suggested_by"])
+            target_relations[pkg_id]["suggested_by"] = list(suggested_by_set)
+            
+        else:
+            target_relations[pkg_id] = pkg
 
 
 # Saves given data as JSON
