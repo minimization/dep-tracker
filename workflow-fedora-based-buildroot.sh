@@ -1,5 +1,13 @@
 ./run.sh $@
 
+#####
+# Variables
+#####
+WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source ${WORK_DIR}/conf/config.inc
+VIEW=${REPO_BASE}
+PACKAGELIST_DIR="${WORK_DIR}/packagelists-${REPO_BASE}"
+
 # Upload to feedback-pipeline
 if ! [ -d ${GIT_DIR}/content-resolver-input ] ; then
   mkdir -p ${GIT_DIR}
