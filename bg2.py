@@ -37,16 +37,19 @@ if repoBase == "rawhide":
     kojiStyle = "koji"
     coreAppend = "fedora-release"
     baseURL = "https://kojipkgs.fedoraproject.org//packages"
+    placeholderURL="https://tiny.distro.builders/view-placeholder-srpm-details--view-eln--"
 elif repoBase == "eln":
     BestEVRVAR = "eln\d\d\d"
     kojiStyle = "koji"
     coreAppend = "fedora-release-eln"
     baseURL = "https://kojipkgs.fedoraproject.org//packages"
+    placeholderURL="https://tiny.distro.builders/view-placeholder-srpm-details--view-eln--"
 else:
     BestEVRVAR = "el9"
     kojiStyle = "stream"
     coreAppend = "redhat-release"
     baseURL = "https://kojihub.stream.rdu2.redhat.com/kojifiles/packages"
+    placeholderURL="http://dell-per930-01.4a2m.lab.eng.bos.redhat.com/content-resolver/view-placeholder-srpm-details--view-c9s--"
 if args.verbose:
     logging.basicConfig(level=logging.DEBUG)
 else:
@@ -71,6 +74,8 @@ coreBuildRootBinaries = []
 coreBuildRootSourceName = []
 coreBuildRootSourceNVR = []
 listSources = []
+listSourceNVRCached = []
+listSourceNVRNeedCache = []
 listSourcesDone = []
 listSourcesQueue = []
 placeholderBinaries = []
@@ -80,15 +85,16 @@ placeholderSources = []
 def get_base(this_arch):
     logging.info("  Setup dnf base: " + this_arch)
     this_base = dnf.Base()
-    this_base.conf.read(repoConfDir + repoName + ".aarch64.repo")
+    this_base.conf.read(repoConfDir + repoName + "." + this_arch + ".repo")
     this_base.conf.installroot = installroot
-    this_base.conf.arch = "aarch64"
+    this_base.conf.arch = this_arch
     this_base.conf.install_weak_deps = False
     this_base.read_all_repos()
     this_base.fill_sack(load_system_repo=False)
     return this_base
 
 def process_core_buildroot():
+    print("Working on Core Buildroot:")
     if os.path.exists(workDir + "corebuildroot.txt"):
         this_coreBuildRoot = open(workDir + "corebuildroot.txt").read().splitlines()
     else:
@@ -114,10 +120,10 @@ def process_core_buildroot():
                 sourcename = sourcenvr.rsplit("-",2)[0]
                 if not sourcename in coreBuildRootSourceName:
                     coreBuildRootSourceName.append(sourcename)
-                    if not sourcename in listSources:
-                        listSources.append(sourcename)
                     if not sourcenvr in listSourcesQueue:
                         listSourcesQueue.append(sourcenvr)
+                    if not pkg in listSourceNVRCached and not pkg in listSourceNVRNeedCache:
+                        listSourceNVRNeedCache.append(sourcenvr)
                     if not sourcenvr in coreBuildRootSourceNVR:
                         coreBuildRootSourceNVR.append(sourcenvr)
             # logging.debug(json.dumps(new_binary_pkg_relations, indent=2, sort_keys=True))
@@ -135,6 +141,71 @@ def process_core_buildroot():
         for item in coreBuildRootSourceNVR:
             f.write("%s\n" % item)
     return coreBuildRootSourceNVR
+
+def process_placeholders():
+    ## BEGIN: placeholder work
+    print("Working on Placeholders:")
+    for arch in archList:
+        placeholderJsonData = {}
+        placeholderJsonData = json.loads(requests.get(placeholderURL + arch + ".json", allow_redirects=True).text)
+        for placeholder_source in placeholderJsonData:
+            print(arch + ": Placeholder: " + placeholder_source)
+            if not placeholder_source in placeholderSources:
+                placeholderSources.append(placeholder_source)
+            thisBinaryList = []
+            thisSourceList = []
+            thisSourceNVRList = []
+            base = get_base(arch)
+            open(outputDir + "output/" + placeholder_source + "-deps-source", "w").close()
+            for this_binary in placeholderJsonData[placeholder_source]['build_requires']:
+                if not this_binary in coreBuildRootBinaries and not this_binary in thisBinaryList:
+                    thisBinaryList.append(this_binary)
+                try:
+                    base.install(this_binary)
+                except dnf.exceptions.MarkingError:
+                    print(arch + ": Placeholder:  Cannot Install: " + this_binary)
+            try:
+                base.resolve()
+                query = base.sack.query().filterm(pkg=base.transaction.install_set)
+                # Save package dependency data
+                # new_binary_pkg_relations = _analyze_package_relations(query)
+                # _update_package_relations_dict(new_binary_pkg_relations, binary_pkg_relations)
+                for pkg in query:
+                    # Deal with binaries 
+                    if not pkg.name in coreBuildRootBinaries and not pkg.name in thisBinaryList:
+                        thisBinaryList.append(pkg.name)
+                    # Deal with sources 
+                    sourcenvr = pkg.sourcerpm.rsplit(".",2)[0]
+                    sourcename = sourcenvr.rsplit("-",2)[0]
+                    if not sourcename in coreBuildRootSourceName and not sourcename in placeholderSources:
+                        if not pkg.source_name in thisSourceList :
+                            thisSourceList.append(pkg.source_name)
+                            if not sourcenvr in listSourcesDone:
+                                listSourcesDone.append(sourcenvr)
+                                if not sourcenvr in listSourcesQueue:
+                                    listSourcesQueue.append(sourcenvr)
+                                if not pkg in listSourceNVRCached and not pkg in listSourceNVRNeedCache:
+                                    listSourceNVRNeedCache.append(sourcenvr)
+                            if not sourcenvr in thisSourceEVR:
+                                thisSourceEVR.append(sourcenvr)
+                    ## Put source on the SourceQueue
+                    if not pkg.source_name in listSources:
+                        listSources.append(pkg.source_name)
+                        with open(outputDir + "BuildRootSourcesNVR", "a+") as fileBuildRootSourcesNVR:
+                            fileBuildRootSourcesNVR.write("%s\n" % (pkg.sourcerpm))
+                    if not pkg.source_name in listSourcesQueue:
+                        listSourcesQueue.append(pkg.source_name)
+            except dnf.exceptions.DepsolveError as e:
+                print(arch + ": Placeholder Resolution Error")
+                print(e)
+            # Write the things out to a file
+            with open(dataDir+'/output/'+placeholder_source+'-deps-'+arch+'-binary', 'w') as f:
+                for item in thisBinaryList:
+                    f.write("%s\n" % item)
+            with open(outputDir + "output/" + placeholder_source + "-deps-source", "a+") as fileSourceDeps:
+                for src in thisSourceList:
+                    fileSourceDeps.write("%s\n" % (src))
+    ## END: placeholder work
 
 def process_package(this_nvr):
     # Get our package name,version and release
@@ -161,22 +232,26 @@ def process_package(this_nvr):
             # new_binary_pkg_relations = _analyze_package_relations(query)
             for pkg in query:
                 # Deal with binaries 
-                if not pkg.name in coreBuildRootBinaries:
-                    with open(dataDir+'/output/'+pkg_name+'-deps-'+arch+'-binary', 'a+') as f:
-                        f.write("%s\n" % (pkg.name))
+                if not pkg.name in coreBuildRootBinaries and not pkg.name in thisBinaryList:
+                    thisBinaryList.append(pkg.name)
                 # Deal with sources 
                 sourcenvr = pkg.sourcerpm.rsplit(".",2)[0]
                 sourcename = sourcenvr.rsplit("-",2)[0]
-                if not sourcename in coreBuildRootSourceName:
+                if not sourcename in coreBuildRootSourceName and not sourcename in placeholderSources:
                     if not sourcename in thisSourceList:
                         thisSourceList.append(sourcename)
-                        if not sourcename in listSources:
-                            listSources.append(sourcename)
+                        if not sourcenvr in listSourcesDone:
+                            listSourcesDone.append(sourcenvr)
                             if not sourcenvr in listSourcesQueue:
                                 listSourcesQueue.append(sourcenvr)
+                            if not pkg in listSourceNVRCached and not pkg in listSourceNVRNeedCache:
+                                listSourceNVRNeedCache.append(sourcenvr)
                         if not sourcenvr in thisSourceEVR:
                             thisSourceEVR.append(sourcenvr)
             # Write these out to a file
+            with open(dataDir+'/output/'+pkg_name+'-deps-'+arch+'-binary', 'w') as f:
+                for item in thisBinaryList:
+                    f.write("%s\n" % item)
             with open(dataDir+'/output/'+pkg_name+'-deps-'+arch+'-source-name', 'w') as f:
                 for item in thisSourceList:
                     f.write("%s\n" % item)
@@ -291,12 +366,45 @@ def download_root_logs(package_nvr):
                     logging.debug(file_url)
                     try:
                         urllib.request.urlretrieve (file_url, file_full_path)
-                        parse_root_log(file_dir)
                     except Exception as ex:
                         logging.debug("No logs for: " + pkg_name + " " + arch)
                         test = 0
     except Exception as e:
         logging.info(e)
+
+def check_cache():
+    for package_nvr in listSourceNVRNeedCache:
+        pkg_name = package_nvr.rsplit("-",2)[0]
+        pkg_version = package_nvr.rsplit("-",2)[1]
+        pkg_release = package_nvr.rsplit("-",2)[2]
+        found = False
+        for arch in full_archList:
+            file_dir = cacheDir+"/"+pkg_name+"/"+pkg_version+"/"+pkg_release+"/"+arch
+            file_full_path = file_dir + "/root.log"
+            if os.path.exists(file_full_path):
+                found = True
+        if found:
+            if package_nvr in listSourceNVRNeedCache:
+                listSourceNVRNeedCache.remove(package_nvr)
+            if not package_nvr in listSourceNVRCached:
+                listSourceNVRCached.append(package_nvr)
+
+def find_new_sources():
+    logging.info("Finding new sources")
+    for package_nvr in listSourcesQueue:
+        pkg_name = package_nvr.rsplit("-",2)[0]
+        pkg_version = package_nvr.rsplit("-",2)[1]
+        pkg_release = package_nvr.rsplit("-",2)[2]
+        for arch in archList:
+            this_builddep_nvrs = open(dataDir+'/output/'+pkg_name+'-deps-'+arch+'-source-nvr').read().splitlines()
+            for this_nvr in this_builddep_nvrs:
+                if not this_nvr in listSourcesQueue and not this_nvr in listSourcesDone:
+                    listSourcesQueue.append(this_nvr)
+                if not this_nvr in listSourceNVRCached and not this_nvr in listSourceNVRNeedCache:
+                    listSourceNVRNeedCache.append(this_nvr)
+        listSourcesQueue.remove(package_nvr)
+        if not package_nvr in listSourcesDone:
+            listSourcesDone.append(package_nvr)
 
 pool = Pool(pool_num)
 logging.info("Core Buildroot:")
@@ -309,14 +417,21 @@ for pkg in initialPkgs:
     if not "placeholder" in pkg:
         if not pkg in listSourcesQueue:
             listSourcesQueue.append(pkg)
-proc = psutil.Process()
-logging.info(proc.open_files())
+        if not pkg in listSourceNVRCached and not pkg in listSourceNVRNeedCache:
+            listSourceNVRNeedCache.append(pkg)
+#proc = psutil.Process()
+#logging.info(proc.open_files())
 logging.info("Working on Queue:")
 while 0 < len(listSourcesQueue):
-    results = pool.map(download_root_logs, listSourcesQueue)
-    this_nvr = listSourcesQueue.pop(0)
-    print("Total: " + str(len(listSources)) + " Queue: " + str(len(listSourcesQueue)) + " Package: " + this_nvr)
-    process_package(this_nvr)
+    print("Done: " + str(len(listSourcesDone)) + " Queue: " + str(len(listSourcesQueue)) + " New: " + str(len(listSourceNVRNeedCache)))
+    #logging.info(listSourceNVRNeedCache)
+    #logging.info(len(listSourceNVRNeedCache))
+    check_cache()
+    #logging.info(len(listSourceNVRNeedCache))
+    results = pool.map(download_root_logs, listSourceNVRNeedCache)
+    # this_nvr = listSourcesQueue.pop(0)
+    results = pool.map(process_package, listSourcesQueue)
+    find_new_sources()
 
 pool.close()
 pool.join()
