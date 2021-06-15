@@ -37,6 +37,7 @@ wget -q -O ${PACKAGELIST_DIR}/Source-NVRs.${this_arch} ${URL_BASE}view-source-pa
 sort -u -o ${PACKAGELIST_DIR}/Packages.${this_arch} ${PACKAGELIST_DIR}/Packages.${this_arch}
 sort -u -o ${PACKAGELIST_DIR}/Sources.${this_arch} ${PACKAGELIST_DIR}/Sources.${this_arch}
 sort -u -o ${PACKAGELIST_DIR}/Package-NVRs.${this_arch} ${PACKAGELIST_DIR}/Package-NVRs.${this_arch}
+sed -i "s/.src.rpm$//" ${PACKAGELIST_DIR}/Source-NVRs.${this_arch}
 sort -u -o ${PACKAGELIST_DIR}/Source-NVRs.${this_arch} ${PACKAGELIST_DIR}/Source-NVRs.${this_arch}
 awk NF ${PACKAGELIST_DIR}/Packages.${this_arch} >> ${PACKAGELIST_DIR}/Packages.all-arches
 awk NF ${PACKAGELIST_DIR}/Sources.${this_arch} >> ${PACKAGELIST_DIR}/Sources.all-arches
