@@ -20,7 +20,6 @@ import tempfile
 import urllib
 from multiprocessing import Pool
 from pathlib import Path
-import psutil
 
 # Arguments
 parser = argparse.ArgumentParser()
@@ -275,6 +274,7 @@ def parse_root_log(full_path):
     elif os.path.exists(part_path + '/noarch/required.pkgs'):
         required_pkgs = open(part_path + '/noarch/required.pkgs').read().splitlines()
     elif not os.path.exists(full_path + '/root.log'):
+        Path(full_path).mkdir(parents=True, exist_ok=True)
         os.mknod(full_path + '/required.pkgs')
     else:
         os.mknod(full_path + '/required.pkgs')
@@ -419,8 +419,6 @@ for pkg in initialPkgs:
             listSourcesQueue.append(pkg)
         if not pkg in listSourceNVRCached and not pkg in listSourceNVRNeedCache:
             listSourceNVRNeedCache.append(pkg)
-#proc = psutil.Process()
-#logging.info(proc.open_files())
 logging.info("Working on Queue:")
 while 0 < len(listSourcesQueue):
     print("Done: " + str(len(listSourcesDone)) + " Queue: " + str(len(listSourcesQueue)) + " New: " + str(len(listSourceNVRNeedCache)))
