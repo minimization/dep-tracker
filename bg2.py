@@ -395,16 +395,21 @@ def find_new_sources():
         pkg_name = package_nvr.rsplit("-",2)[0]
         pkg_version = package_nvr.rsplit("-",2)[1]
         pkg_release = package_nvr.rsplit("-",2)[2]
+        found = False
         for arch in archList:
-            this_builddep_nvrs = open(dataDir+'/output/'+pkg_name+'-deps-'+arch+'-source-nvr').read().splitlines()
-            for this_nvr in this_builddep_nvrs:
-                if not this_nvr in listSourcesQueue and not this_nvr in listSourcesDone:
-                    listSourcesQueue.append(this_nvr)
-                if not this_nvr in listSourceNVRCached and not this_nvr in listSourceNVRNeedCache:
-                    listSourceNVRNeedCache.append(this_nvr)
-        listSourcesQueue.remove(package_nvr)
-        if not package_nvr in listSourcesDone:
-            listSourcesDone.append(package_nvr)
+            file_full_path = dataDir+'/output/'+pkg_name+'-deps-'+arch+'-source-nvr'
+            if os.path.exists(file_full_path):
+                found = True
+                this_builddep_nvrs = open(file_full_path).read().splitlines()
+                for this_nvr in this_builddep_nvrs:
+                    if not this_nvr in listSourcesQueue and not this_nvr in listSourcesDone:
+                        listSourcesQueue.append(this_nvr)
+                    if not this_nvr in listSourceNVRCached and not this_nvr in listSourceNVRNeedCache:
+                        listSourceNVRNeedCache.append(this_nvr)
+        if found:
+            listSourcesQueue.remove(package_nvr)
+            if not package_nvr in listSourcesDone:
+                listSourcesDone.append(package_nvr)
 
 pool = Pool(pool_num)
 logging.info("Core Buildroot:")
