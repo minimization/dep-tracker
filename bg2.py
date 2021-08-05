@@ -80,6 +80,10 @@ listSourcesQueue = []
 placeholderBinaries = []
 placeholderSources = []
 
+# Package dependency data
+binary_pkg_relations = {}
+source_pkg_relations = {}
+
 # DNF Bases
 def get_base(this_arch):
     logging.info("  Setup dnf base: " + this_arch)
@@ -92,6 +96,88 @@ def get_base(this_arch):
     this_base.fill_sack(load_system_repo=False)
     return this_base
 
+# Saves given data as JSON
+def dump_data(path, data):
+    with open(path, 'w') as file:
+        json.dump(data, file)
+
+# Analyzes package relations and outputs graph data
+# representing package to package dependency relations
+# within given DNF query
+def _analyze_package_relations(dnf_query):
+    relations = {}
+
+    for pkg in dnf_query:
+        pkg_id = "{name}-{evr}.{arch}".format(
+            name=pkg.name,
+            evr=pkg.evr,
+            arch=pkg.arch
+        )
+        
+        required_by = set()
+        recommended_by = set()
+        suggested_by = set()
+
+        for dep_pkg in dnf_query.filter(requires=pkg.provides):
+            dep_pkg_id = "{name}-{evr}.{arch}".format(
+                name=dep_pkg.name,
+                evr=dep_pkg.evr,
+                arch=dep_pkg.arch
+            )
+            required_by.add(dep_pkg_id)
+
+        for dep_pkg in dnf_query.filter(recommends=pkg.provides):
+            dep_pkg_id = "{name}-{evr}.{arch}".format(
+                name=dep_pkg.name,
+                evr=dep_pkg.evr,
+                arch=dep_pkg.arch
+            )
+            recommended_by.add(dep_pkg_id)
+        
+        for dep_pkg in dnf_query.filter(suggests=pkg.provides):
+            dep_pkg_id = "{name}-{evr}.{arch}".format(
+                name=dep_pkg.name,
+                evr=dep_pkg.evr,
+                arch=dep_pkg.arch
+            )
+            suggested_by.add(dep_pkg_id)
+        
+        relations[pkg_id] = {}
+        relations[pkg_id]["required_by"] = sorted(list(required_by))
+        relations[pkg_id]["recommended_by"] = sorted(list(recommended_by))
+        relations[pkg_id]["suggested_by"] = sorted(list(suggested_by))
+        relations[pkg_id]["source_name"] = pkg.source_name
+    
+    return relations
+
+# Updates an existing dictionary target_relations with packages
+# from source_relations
+def _update_package_relations_dict(source_relations, target_relations):
+
+    if not source_relations:
+        return
+    
+    for pkg_id, pkg in source_relations.items():
+        if pkg_id in target_relations:
+            # If it exists, I just need to update the dependency lists
+            required_by_set = set()
+            required_by_set.update(target_relations[pkg_id]["required_by"])
+            required_by_set.update(pkg["required_by"])
+            target_relations[pkg_id]["required_by"] = list(required_by_set)
+
+            recommended_by_set = set()
+            recommended_by_set.update(target_relations[pkg_id]["recommended_by"])
+            recommended_by_set.update(pkg["recommended_by"])
+            target_relations[pkg_id]["recommended_by"] = list(recommended_by_set)
+
+            suggested_by_set = set()
+            suggested_by_set.update(target_relations[pkg_id]["suggested_by"])
+            suggested_by_set.update(pkg["suggested_by"])
+            target_relations[pkg_id]["suggested_by"] = list(suggested_by_set)
+            
+        else:
+            target_relations[pkg_id] = pkg
+
 def process_core_buildroot():
     print("Working on Core Buildroot:")
     if os.path.exists(workDir + "corebuildroot.txt"):
@@ -100,6 +186,7 @@ def process_core_buildroot():
         this_coreBuildRoot=coreBuildRoot
     this_coreBuildRoot.append(coreAppend)
     for arch in archList:
+        print("  "+arch)
         base = get_base(arch)
         logging.debug("  " + arch + ": Populating Core Buildroot")
         for this_binary in this_coreBuildRoot:
@@ -115,16 +202,16 @@ def process_core_buildroot():
             for pkg in query:
                 if not pkg.name in coreBuildRootBinaries:
                     coreBuildRootBinaries.append(pkg.name)
-                sourcenvr = pkg.sourcerpm.rsplit(".",2)[0]
-                sourcename = sourcenvr.rsplit("-",2)[0]
-                if not sourcename in coreBuildRootSourceName:
-                    coreBuildRootSourceName.append(sourcename)
-                    if not sourcenvr in listSourcesQueue:
-                        listSourcesQueue.append(sourcenvr)
-                    if not pkg in listSourceNVRCached and not pkg in listSourceNVRNeedCache:
-                        listSourceNVRNeedCache.append(sourcenvr)
-                    if not sourcenvr in coreBuildRootSourceNVR:
-                        coreBuildRootSourceNVR.append(sourcenvr)
+                    sourcenvr = pkg.sourcerpm.rsplit(".",2)[0]
+                    sourcename = sourcenvr.rsplit("-",2)[0]
+                    if not sourcename in coreBuildRootSourceName:
+                        coreBuildRootSourceName.append(sourcename)
+                        if not sourcenvr in coreBuildRootSourceNVR:
+                            coreBuildRootSourceNVR.append(sourcenvr)
+                        if not sourcenvr in listSourcesQueue:
+                            listSourcesQueue.append(sourcenvr)
+#                        if not pkg in listSourceNVRCached and not pkg in listSourceNVRNeedCache:
+#                            listSourceNVRNeedCache.append(sourcenvr)
             # logging.debug(json.dumps(new_binary_pkg_relations, indent=2, sort_keys=True))
         except dnf.exceptions.DepsolveError as e:
             logging.info("Core BuildRoot Resolution Error")
@@ -141,28 +228,32 @@ def process_core_buildroot():
             f.write("%s\n" % item)
     return coreBuildRootSourceNVR
 
-def process_placeholders():
-    ## BEGIN: placeholder work
-    print("Working on Placeholders:")
+def process_package(this_nvr):
+    # print("  Processing: " + this_nvr)
+    this_package = {}
+    this_package["snvr"] = this_nvr
+    # Get our package name,version and release
+    pkg_name = this_nvr.rsplit("-",2)[0]
+    pkg_version = this_nvr.rsplit("-",2)[1]
+    pkg_release = this_nvr.rsplit("-",2)[2]
+    print("    Processing: " + this_nvr + " :: " + pkg_name + " " + pkg_version + " " + pkg_release)
+    # Process our package, one arch at a time.
     for arch in archList:
-        placeholderJsonData = {}
-        placeholderJsonData = json.loads(requests.get(placeholderURL + arch + ".json", allow_redirects=True).text)
-        for placeholder_source in placeholderJsonData:
-            print(arch + ": Placeholder: " + placeholder_source)
-            if not placeholder_source in placeholderSources:
-                placeholderSources.append(placeholder_source)
-            thisBinaryList = []
-            thisSourceList = []
-            thisSourceNVRList = []
+        file_dir = cacheDir+"/"+pkg_name+"/"+pkg_version+"/"+pkg_release+"/"+arch
+        pkg_deps = parse_root_log(file_dir)
+        thisBinaryList = []
+        thisSourceList = []
+        thisSourceEVR = []
+        this_required = {}
+        this_required_deps = {}
+        if len(pkg_deps) >= 1 :
             base = get_base(arch)
-            open(outputDir + "output/" + placeholder_source + "-deps-source", "w").close()
-            for this_binary in placeholderJsonData[placeholder_source]['build_requires']:
-                if not this_binary in coreBuildRootBinaries and not this_binary in thisBinaryList:
-                    thisBinaryList.append(this_binary)
+            for this_binary in pkg_deps:
                 try:
                     base.install(this_binary)
                 except dnf.exceptions.MarkingError:
-                    print(arch + ": Placeholder:  Cannot Install: " + this_binary)
+                    logging.info('    Cannot Install: ' + this_binary + ' for: ' + this_nvr)
+            ## Resolve the coreBuildRoot
             try:
                 base.resolve()
                 query = base.sack.query().filterm(pkg=base.transaction.install_set)
@@ -170,98 +261,37 @@ def process_placeholders():
                 # new_binary_pkg_relations = _analyze_package_relations(query)
                 # _update_package_relations_dict(new_binary_pkg_relations, binary_pkg_relations)
                 for pkg in query:
-                    # Deal with binaries 
-                    if not pkg.name in coreBuildRootBinaries and not pkg.name in thisBinaryList:
-                        thisBinaryList.append(pkg.name)
-                    # Deal with sources 
-                    sourcenvr = pkg.sourcerpm.rsplit(".",2)[0]
-                    sourcename = sourcenvr.rsplit("-",2)[0]
-                    if not sourcename in coreBuildRootSourceName and not sourcename in placeholderSources:
-                        if not pkg.source_name in thisSourceList :
-                            thisSourceList.append(pkg.source_name)
-                            if not sourcenvr in listSourcesDone:
-                                listSourcesDone.append(sourcenvr)
-                                if not sourcenvr in listSourcesQueue:
-                                    listSourcesQueue.append(sourcenvr)
-                                if not pkg in listSourceNVRCached and not pkg in listSourceNVRNeedCache:
-                                    listSourceNVRNeedCache.append(sourcenvr)
-                            if not sourcenvr in thisSourceEVR:
-                                thisSourceEVR.append(sourcenvr)
-                    ## Put source on the SourceQueue
-                    if not pkg.source_name in listSources:
-                        listSources.append(pkg.source_name)
-                        with open(outputDir + "BuildRootSourcesNVR", "a+") as fileBuildRootSourcesNVR:
-                            fileBuildRootSourcesNVR.write("%s\n" % (pkg.sourcerpm))
-                    if not pkg.source_name in listSourcesQueue:
-                        listSourcesQueue.append(pkg.source_name)
-            except dnf.exceptions.DepsolveError as e:
-                print(arch + ": Placeholder Resolution Error")
-                print(e)
-            # Write the things out to a file
-            with open(dataDir+'/output/'+placeholder_source+'-deps-'+arch+'-binary', 'w') as f:
-                for item in thisBinaryList:
-                    f.write("%s\n" % item)
-            with open(outputDir + "output/" + placeholder_source + "-deps-source", "a+") as fileSourceDeps:
-                for src in thisSourceList:
-                    fileSourceDeps.write("%s\n" % (src))
-    ## END: placeholder work
-
-def process_package(this_nvr):
-    # Get our package name,version and release
-    pkg_name = this_nvr.rsplit("-",2)[0]
-    pkg_version = this_nvr.rsplit("-",2)[1]
-    pkg_release = this_nvr.rsplit("-",2)[2]
-    # Process out package, one arch at a time.
-    for arch in archList:
-        file_dir = cacheDir+"/"+pkg_name+"/"+pkg_version+"/"+pkg_release+"/"+arch
-        pkg_deps = parse_root_log(file_dir)
-        thisBinaryList = []
-        thisSourceList = []
-        thisSourceEVR = []
-        base = get_base(arch)
-        for this_binary in pkg_deps:
-            try:
-                base.install(this_binary)
-            except dnf.exceptions.MarkingError:
-                logging.info('    Cannot Install: ' + this_binary + ' for: ' + this_nvr)
-        ## Resolve the coreBuildRoot
-        try:
-            base.resolve()
-            query = base.sack.query().filterm(pkg=base.transaction.install_set)
-            # new_binary_pkg_relations = _analyze_package_relations(query)
-            for pkg in query:
-                # Deal with binaries 
-                if not pkg.name in coreBuildRootBinaries and not pkg.name in thisBinaryList:
-                    thisBinaryList.append(pkg.name)
-                # Deal with sources 
-                sourcenvr = pkg.sourcerpm.rsplit(".",2)[0]
-                sourcename = sourcenvr.rsplit("-",2)[0]
-                if not sourcename in coreBuildRootSourceName and not sourcename in placeholderSources:
-                    if not sourcename in thisSourceList:
-                        thisSourceList.append(sourcename)
-                        if not sourcenvr in listSourcesDone:
-                            listSourcesDone.append(sourcenvr)
-                            if not sourcenvr in listSourcesQueue:
+                    if not pkg.name in coreBuildRootBinaries:
+                        # Setup Variables
+                        binarynvr = pkg.name+"."+pkg.evr
+                        sourcenvr = pkg.sourcerpm.rsplit(".",2)[0]
+                        sourcename = sourcenvr.rsplit("-",2)[0]
+                        if not sourcename in coreBuildRootSourceName:
+                            this_pkg = {
+                                    "nvr": binarynvr ,
+                                    "sname": sourcename ,
+                                    "snvr": sourcenvr
+                                }
+                            if pkg.name in pkg_deps:
+                                this_required[pkg.name] = this_pkg
+                            else:
+                                this_required_deps[pkg.name] = this_pkg
+                            if not sourcenvr in listSourcesQueue and not sourcenvr in listSourcesDone:
                                 listSourcesQueue.append(sourcenvr)
-                            if not pkg in listSourceNVRCached and not pkg in listSourceNVRNeedCache:
-                                listSourceNVRNeedCache.append(sourcenvr)
-                        if not sourcenvr in thisSourceEVR:
-                            thisSourceEVR.append(sourcenvr)
-            # Write these out to a file
-            with open(dataDir+'/output/'+pkg_name+'-deps-'+arch+'-binary', 'w') as f:
-                for item in thisBinaryList:
-                    f.write("%s\n" % item)
-            with open(dataDir+'/output/'+pkg_name+'-deps-'+arch+'-source-name', 'w') as f:
-                for item in thisSourceList:
-                    f.write("%s\n" % item)
-            with open(dataDir+'/output/'+pkg_name+'-deps-'+arch+'-source-nvr', 'w') as f:
-                for item in thisSourceEVR:
-                    f.write("%s\n" % item)
-            # logging.debug(json.dumps(new_binary_pkg_relations, indent=2, sort_keys=True))
-        except dnf.exceptions.DepsolveError as e:
-            logging.info("Package Resolution Error: " + this_nvr)
-            logging.info(e)
-        base.close()
+            except dnf.exceptions.DepsolveError as e:
+                logging.info("Package Resolution Error: " + this_nvr)
+                logging.info(e)
+            base.close()
+        this_arch = {}
+        this_arch["required"] = this_required
+        this_arch["required_deps"] = this_required_deps
+        this_package[arch] = this_arch
+    source_pkg_relations[pkg_name] = this_package
+    #print(source_pkg_relations)
+    #print(listSourcesQueue)
+    #print(source_pkg_relations)
+    listSourcesQueue.remove(this_nvr)
+    listSourcesDone.append(this_nvr)
 
 
 def parse_root_log(full_path):
@@ -372,70 +402,51 @@ def download_root_logs(package_nvr):
     except Exception as e:
         logging.info(e)
 
-def check_cache():
-    for package_nvr in listSourceNVRNeedCache:
-        pkg_name = package_nvr.rsplit("-",2)[0]
-        pkg_version = package_nvr.rsplit("-",2)[1]
-        pkg_release = package_nvr.rsplit("-",2)[2]
-        found = False
-        for arch in full_archList:
-            file_dir = cacheDir+"/"+pkg_name+"/"+pkg_version+"/"+pkg_release+"/"+arch
-            file_full_path = file_dir + "/root.log"
-            if os.path.exists(file_full_path):
-                found = True
-        if found:
-            if package_nvr in listSourceNVRNeedCache:
-                listSourceNVRNeedCache.remove(package_nvr)
-            if not package_nvr in listSourceNVRCached:
-                listSourceNVRCached.append(package_nvr)
-
-def find_new_sources():
-    logging.info("Finding new sources")
-    for package_nvr in listSourcesQueue:
-        pkg_name = package_nvr.rsplit("-",2)[0]
-        pkg_version = package_nvr.rsplit("-",2)[1]
-        pkg_release = package_nvr.rsplit("-",2)[2]
-        found = False
-        for arch in archList:
-            file_full_path = dataDir+'/output/'+pkg_name+'-deps-'+arch+'-source-nvr'
-            if os.path.exists(file_full_path):
-                found = True
-                this_builddep_nvrs = open(file_full_path).read().splitlines()
-                for this_nvr in this_builddep_nvrs:
-                    if not this_nvr in listSourcesQueue and not this_nvr in listSourcesDone:
-                        listSourcesQueue.append(this_nvr)
-                    if not this_nvr in listSourceNVRCached and not this_nvr in listSourceNVRNeedCache:
-                        listSourceNVRNeedCache.append(this_nvr)
-        if found:
-            listSourcesQueue.remove(package_nvr)
-            if not package_nvr in listSourcesDone:
-                listSourcesDone.append(package_nvr)
-
 pool = Pool(pool_num)
 logging.info("Core Buildroot:")
 logging.info("  Setup and Getting NVRs")
 initialCoreNVRs = process_core_buildroot()
+print("  Done: " + str(len(source_pkg_relations)) + " Queue: " + str(len(listSourcesQueue)))
         
-logging.info("Adding Package List to Queue:")
+print("Adding Package List to Queue:")
 initialPkgs = open(args.file).read().splitlines()
 for pkg in initialPkgs:
     if not "placeholder" in pkg:
         if not pkg in listSourcesQueue:
             listSourcesQueue.append(pkg)
-        if not pkg in listSourceNVRCached and not pkg in listSourceNVRNeedCache:
-            listSourceNVRNeedCache.append(pkg)
-logging.info("Working on Queue:")
+#        if not pkg in listSourceNVRCached and not pkg in listSourceNVRNeedCache:
+#            listSourceNVRNeedCache.append(pkg)
+print("  Done: " + str(len(source_pkg_relations)) + " Queue: " + str(len(listSourcesQueue)))
+print("Working on Queue:")
 while 0 < len(listSourcesQueue):
-    print("Done: " + str(len(listSourcesDone)) + " Queue: " + str(len(listSourcesQueue)) + " New: " + str(len(listSourceNVRNeedCache)))
+    print("  Processed: " + str(len(source_pkg_relations)) + " Queue: " + str(len(listSourcesQueue)) + " Done: " + str(len(listSourcesDone)))
+    #print(listSourcesQueue)
+    tmpQueue = list(listSourcesQueue)
     #logging.info(listSourceNVRNeedCache)
     #logging.info(len(listSourceNVRNeedCache))
-    check_cache()
+#    print("  Checking root log cache")
+#    check_cache()
     #logging.info(len(listSourceNVRNeedCache))
-    results = pool.map(download_root_logs, listSourceNVRNeedCache)
+    print("  Downloading root logs to cache")
+    results = pool.map(download_root_logs, listSourcesQueue)
+#    print("    Done: " + str(len(listSourceNVRNeedCache)))
     # this_nvr = listSourcesQueue.pop(0)
-    results = pool.map(process_package, listSourcesQueue)
-    find_new_sources()
+    print("  Processing packages")
+    for pkg in tmpQueue:
+      process_package(pkg)
+#    find_new_sources()
 
 pool.close()
 pool.join()
+
+# Dumping package dependency data
+filename = "output.json"
+filepath = os.path.join(dataDir, filename)
+file_data = {}
+file_data["document_type"] = "buildroot-soure-relations"
+file_data["version"] = "1"
+file_data["data"] = {}
+file_data["data"]["view_id"] = "1"
+file_data["data"]["pkgs"] = source_pkg_relations
+dump_data(filepath, file_data)
 
