@@ -62,7 +62,7 @@ if repoBase == "eln":
     placeholderURL="https://tiny.distro.builders/view-placeholder-srpm-details--view-eln--x86_64.json"
 elif repoBase == "c9s":
     coreBuildRoot.append("redhat-release")
-    placeholderURL="http://dell-per930-01.4a2m.lab.eng.bos.redhat.com/content-resolver/view-placeholder-srpm-details--view-c9s--x86_64.json"
+    placeholderURL="https://tiny.distro.builders/view-placeholder-srpm-details--view-c9s--x86_64.json"
 else:
     coreBuildRoot.append("fedora-release")
     placeholderURL="https://tiny.distro.builders/view-placeholder-srpm-details--view-eln--x86_64.json"
