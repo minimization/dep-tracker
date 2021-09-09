@@ -47,8 +47,8 @@ else:
     BestEVRVAR = "el9"
     kojiStyle = "stream"
     coreAppend = "redhat-release"
-    baseURL = "https://kojihub.stream.rdu2.redhat.com/kojifiles/packages"
-    placeholderURL="http://dell-per930-01.4a2m.lab.eng.bos.redhat.com/content-resolver/view-placeholder-srpm-details--view-c9s--"
+    baseURL = "https://kojihub.stream.centos.org/kojifiles/packages"
+    placeholderURL="https://tiny.distro.builders/view-placeholder-srpm-details--view-c9s--x86_64.json"
 if args.verbose:
     logging.basicConfig(level=logging.DEBUG)
 else:
@@ -443,7 +443,7 @@ pool.join()
 filename = "output.json"
 filepath = os.path.join(dataDir, filename)
 file_data = {}
-file_data["document_type"] = "buildroot-soure-relations"
+file_data["document_type"] = "buildroot-source-relations"
 file_data["version"] = "1"
 file_data["data"] = {}
 file_data["data"]["view_id"] = "1"
