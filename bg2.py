@@ -48,7 +48,7 @@ else:
     kojiStyle = "stream"
     coreAppend = "redhat-release"
     baseURL = "https://kojihub.stream.centos.org/kojifiles/packages"
-    placeholderURL="https://tiny.distro.builders/view-placeholder-srpm-details--view-c9s--x86_64.json"
+    placeholderURL="https://tiny.distro.builders/view-placeholder-srpm-details--view-c9s--"
 if args.verbose:
     logging.basicConfig(level=logging.DEBUG)
 else:
