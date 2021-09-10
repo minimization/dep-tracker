@@ -322,7 +322,7 @@ def parse_root_log(full_path):
                 logging.debug(line)
                 if len(line) >2 :
                     if parseStatus == 1:
-                        if line[2] == "================================================================================":
+                        if "=================" in line[2]:
                             if check == 0:
                                 check = 1
                             else:
@@ -340,11 +340,11 @@ def parse_root_log(full_path):
                             with open(full_path + '/base.pkgs', 'a') as bp:
                                 bp.write("%s\n" % (line[2]))
                     elif parseStatus == 3:
-                        if line[2] == "================================================================================":
+                        if "=================" in line[2]:
                             parseStatus = 4
                             logging.debug("    Status: " + str(parseStatus))
                     elif parseStatus == 4:
-                        if line[2] == "================================================================================":
+                        if "=================" in line[2]:
                             if check == 0:
                                 check = 1
                             else:
