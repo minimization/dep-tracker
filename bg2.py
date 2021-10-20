@@ -25,30 +25,31 @@ from pathlib import Path
 parser = argparse.ArgumentParser()
 parser.add_argument('-f', '--file', default='./package-list.txt', help="List of package NVRs")
 parser.add_argument('-r', '--repo', default='eln', help="What repo are we using",
-        choices=["rawhide", "eln", "c9s"])
+        choices=["rawhide", "eln", "c9s", "a-neptune", "a-podman", "a-q-podman", "a-servers", "a-combined"])
 parser.add_argument('-w', '--workdir', default=os.getcwd()+"/", help="Where we are doing the work")
 parser.add_argument("-v", "--verbose", help="Enable debug logging", action='store_true')
 args = parser.parse_args()
-repoName = args.repo
 repoBase = args.repo
 if repoBase == "rawhide":
-    BestEVRVAR = "fc\d\d"
     kojiStyle = "koji"
+    repoName = args.repo
     coreAppend = "fedora-release"
     baseURL = "https://kojipkgs.fedoraproject.org//packages"
-    placeholderURL="https://tiny.distro.builders/view-placeholder-srpm-details--view-eln--"
 elif repoBase == "eln":
-    BestEVRVAR = "eln\d\d\d"
     kojiStyle = "koji"
+    repoName = args.repo
     coreAppend = "fedora-release-eln"
     baseURL = "https://kojipkgs.fedoraproject.org//packages"
-    placeholderURL="https://tiny.distro.builders/view-placeholder-srpm-details--view-eln--"
-else:
-    BestEVRVAR = "el9"
+elif repoBase == "c9s":
     kojiStyle = "stream"
+    repoName = args.repo
     coreAppend = "redhat-release"
     baseURL = "https://kojihub.stream.centos.org/kojifiles/packages"
-    placeholderURL="https://tiny.distro.builders/view-placeholder-srpm-details--view-c9s--"
+else:
+    kojiStyle = "mbox"
+    repoName = "cs8e"
+    coreAppend = "redhat-release"
+    baseURL = "https://koji.mbox.centos.org/pkgs/packages"
 if args.verbose:
     logging.basicConfig(level=logging.DEBUG)
 else:
@@ -301,12 +302,7 @@ def parse_root_log(full_path):
     required_pkgs = []
     if os.path.exists(full_path + '/required.pkgs'):
         required_pkgs = open(full_path + '/required.pkgs').read().splitlines()
-    elif os.path.exists(part_path + '/noarch/required.pkgs'):
-        required_pkgs = open(part_path + '/noarch/required.pkgs').read().splitlines()
-    elif not os.path.exists(full_path + '/root.log'):
-        Path(full_path).mkdir(parents=True, exist_ok=True)
-        os.mknod(full_path + '/required.pkgs')
-    else:
+    elif os.path.exists(full_path + '/root.log'):
         os.mknod(full_path + '/required.pkgs')
         # parseStatus
         # 1: top, 2: base required packages 3: base other packages
@@ -369,6 +365,11 @@ def parse_root_log(full_path):
                             with open(full_path + '/required.pkgs', 'a') as rp:
                                 rp.write("%s\n" % (line[2]))
                 line = rl.readline().split()
+    elif os.path.exists(part_path + '/noarch/required.pkgs'):
+        shutil.copy2(part_path + '/noarch/required.pkgs', full_path + '/required.pkgs')
+        required_pkgs = open(part_path + '/noarch/required.pkgs').read().splitlines()
+    elif os.path.exists(part_path + '/noarch/root.log'):
+        required_pkgs = parse_root_log(part_path + '/noarch')
     return required_pkgs
 
 def download_root_logs(package_nvr):
