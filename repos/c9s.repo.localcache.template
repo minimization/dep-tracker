@@ -1,7 +1,7 @@
 [main]
 cachedir=CACHE-DIR
 
-[dt-BaseOS]
+[dt-baseos]
 name=RHEL BaseOS
 baseurl=http://download-node-02.eng.bos.redhat.com/rhel-9/nightly/RHEL-9-Beta/latest-RHEL-9.0.0/compose/BaseOS/$basearch/os/
 enabled=1
@@ -9,7 +9,7 @@ gpgcheck=0
 priority=90
 exclude=exim qemu esmtp opensmtpd esmtp-local-delivery
 
-[dt-BaseOS-source]
+[dt-baseos-source]
 name=RHEL BaseOS - Source
 baseurl=http://download-node-02.eng.bos.redhat.com/rhel-9/nightly/RHEL-9-Beta/latest-RHEL-9.0.0/compose/BaseOS/source/tree/
 enabled=1
@@ -17,7 +17,7 @@ gpgcheck=0
 priority=91
 exclude=kernel-tools kernel-headers rubygems rubygem-json rubygem-minitest rubygem-power_assert rubygem-rake rubygem-rdoc rubygem-test-unit exim qemu esmtp
 
-[dt-AppStream]
+[dt-appstream]
 name=RHEL AppStream
 baseurl=http://download-node-02.eng.bos.redhat.com/rhel-9/nightly/RHEL-9-Beta/latest-RHEL-9.0.0/compose/AppStream/$basearch/os/
 enabled=1
@@ -25,7 +25,7 @@ gpgcheck=0
 priority=92
 exclude=exim qemu esmtp opensmtpd esmtp-local-delivery
 
-[dt-AppStream-source]
+[dt-appstream-source]
 name=RHEL AppStream - Source
 baseurl=http://download-node-02.eng.bos.redhat.com/rhel-9/nightly/RHEL-9-Beta/latest-RHEL-9.0.0/compose/AppStream/source/tree/
 enabled=1
