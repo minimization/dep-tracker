@@ -25,7 +25,7 @@ from pathlib import Path
 parser = argparse.ArgumentParser()
 parser.add_argument('-f', '--file', default='./package-list.txt', help="List of package NVRs")
 parser.add_argument('-r', '--repo', default='eln', help="What repo are we using",
-        choices=["rawhide", "eln", "c9s", "a-neptune", "a-podman", "a-q-podman", "a-servers", "a-combined"])
+        choices=["rawhide", "eln", "c9s", "a-neptune", "cs8e", "a-podman", "a-q-podman", "a-servers", "a-combined"])
 parser.add_argument('-w', '--workdir', default=os.getcwd()+"/", help="Where we are doing the work")
 parser.add_argument("-v", "--verbose", help="Enable debug logging", action='store_true')
 args = parser.parse_args()
@@ -33,23 +33,32 @@ repoBase = args.repo
 if repoBase == "rawhide":
     kojiStyle = "koji"
     repoName = args.repo
+    archList = ["aarch64", "ppc64le", "s390x", "x86_64"]
     coreAppend = "fedora-release"
     baseURL = "https://kojipkgs.fedoraproject.org//packages"
+    repoList = ["fed-rawhide"]
 elif repoBase == "eln":
     kojiStyle = "koji"
     repoName = args.repo
+    archList = ["aarch64", "ppc64le", "s390x", "x86_64"]
     coreAppend = "fedora-release-eln"
     baseURL = "https://kojipkgs.fedoraproject.org//packages"
+    repoList = ["eln", "fed-rawhide"]
 elif repoBase == "c9s":
     kojiStyle = "stream"
     repoName = args.repo
+    archList = ["aarch64", "ppc64le", "s390x", "x86_64"]
     coreAppend = "redhat-release"
     baseURL = "https://kojihub.stream.centos.org/kojifiles/packages"
+    repoList = ["c9s-baseos", "c9s-appstream", "c9s-CRB", "c9s-HighAvailability", "c9s-NFV", "c9s-RT", "c9s-ResilientStorage", "c9s-SAP", "c9s-SAPHANA", "c9s-Buildroot"]
 else:
     kojiStyle = "mbox"
     repoName = "cs8e"
+    archList = ["aarch64", "ppc64le", "x86_64"]
     coreAppend = "redhat-release"
     baseURL = "https://koji.mbox.centos.org/pkgs/packages"
+    repoList = ["cs8-baseos", "cs8-appstream", "cs8-powertools", "cs8-extras", "cs8-epel", "cs8-epel-next"]
+    #repoList = ["dt-baseos", "dt-appstream"]
 if args.verbose:
     logging.basicConfig(level=logging.DEBUG)
 else:
@@ -68,7 +77,6 @@ installroot = "/installroot"
 
 # Lists
 full_archList = ["noarch", "aarch64", "ppc64le", "s390x", "x86_64"]
-archList = ["aarch64", "ppc64le", "s390x", "x86_64"]
 coreBuildRoot = ['bash', 'bzip2', 'coreutils', 'cpio', 'diffutils', 'findutils', 'gawk', 'glibc-minimal-langpack', 'grep', 'gzip', 'info', 'make', 'patch', 'redhat-rpm-config', 'rpm-build', 'sed', 'shadow-utils', 'tar', 'unzip', 'util-linux', 'which', 'xz']
 coreBuildRootBinaries = []
 coreBuildRootSourceName = []
@@ -80,6 +88,15 @@ listSourcesDone = []
 listSourcesQueue = []
 placeholderBinaries = []
 placeholderSources = []
+# Fill this out with all the repos, or make it into a file to source
+repoURLList = {
+  "cs8-baseos": "http://mirror.centos.org/centos/8-stream/BaseOS/$basearch/os/", 
+  "cs8-appstream": "http://mirror.centos.org/centos/8-stream/AppStream/$basearch/os/", 
+  "cs8-powertools": "http://mirror.centos.org/centos/8-stream/PowerTools/$basearch/os/", 
+  "cs8-extras": "http://mirror.centos.org/centos/8-stream/extras/$basearch/os/", 
+  "cs8-epel": "https://dl.fedoraproject.org/pub/epel/8/Everything/$basearch/", 
+  "cs8-epel-next": "https://dl.fedoraproject.org/pub/epel/next/8/Everything/$basearch/"
+  }
 
 # Package dependency data
 binary_pkg_relations = {}
@@ -89,12 +106,17 @@ source_pkg_relations = {}
 def get_base(this_arch):
     logging.info("  Setup dnf base: " + this_arch)
     this_base = dnf.Base()
-    this_base.conf.read(repoConfDir + repoName + "." + this_arch + ".repo")
-    this_base.conf.installroot = installroot
-    this_base.conf.arch = this_arch
-    this_base.conf.install_weak_deps = False
-    this_base.read_all_repos()
+    conf = this_base.conf
+    conf.installroot = installroot
+    conf.arch = this_arch
+    conf.install_weak_deps = False
+    conf.cachedir = workDir + "cache/" + repoBase + "-" + this_arch
+    for r in repoList:
+      this_base.repos.add_new_repo(r, conf, baseurl=[repoURLList[r]])
+    #for repo in this_base.repos.iter_enabled():
+    #  print("    id: {} baseurl: {} ".format(repo.id, repo.baseurl))
     this_base.fill_sack(load_system_repo=False)
+
     return this_base
 
 # Saves given data as JSON
