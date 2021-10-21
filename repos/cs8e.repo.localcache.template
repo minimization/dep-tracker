@@ -1,0 +1,53 @@
+[main]
+cachedir=CACHE-DIR
+
+[dt-baseos]
+name=CS8 BaseOS
+baseurl=baseurl: http://mirror.centos.org/centos/8-stream/BaseOS/$basearch/os/
+enabled=1
+gpgcheck=0
+priority=90
+exclude=exim qemu esmtp opensmtpd esmtp-local-delivery
+
+[dt-appstream]
+name=CS8 AppStream
+baseurl=http://mirror.centos.org/centos/8-stream/AppStream/$basearch/os/
+enabled=1
+gpgcheck=0
+priority=92
+exclude=exim qemu esmtp opensmtpd esmtp-local-delivery
+
+[dt-powertools]
+name=CS8 Powertools
+baseurl=http://mirror.centos.org/centos/8-stream/PowerTools/$basearch/os/
+enabled=1
+gpgcheck=0
+priority=94
+exclude=exim qemu esmtp opensmtpd esmtp-local-delivery
+
+[dt-extras]
+name=CS8 Extras
+baseurl=http://mirror.centos.org/centos/8-stream/extras/$basearch/os/
+enabled=1
+gpgcheck=0
+priority=98
+exclude=exim qemu esmtp opensmtpd esmtp-local-delivery
+skip_if_unavailable=True
+
+[dt-epel]
+name=EPEL 8 Next
+baseurl=https://dl.fedoraproject.org/pub/epel/8/Everything/$basearch/
+enabled=1
+gpgcheck=0
+priority=99
+exclude=exim qemu esmtp opensmtpd esmtp-local-delivery
+skip_if_unavailable=True
+
+[dt-epel-next]
+name=EPEL 8 Next
+baseurl=https://dl.fedoraproject.org/pub/epel/next/8/Everything/$basearch/
+enabled=1
+gpgcheck=0
+priority=100
+exclude=exim qemu esmtp opensmtpd esmtp-local-delivery
+skip_if_unavailable=True
