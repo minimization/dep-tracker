@@ -14,7 +14,8 @@ fi
 #####
 # Variables
 #####
-ARCH_LIST=(aarch64 ppc64le s390x x86_64)
+ARCH_LIST=(aarch64 x86_64)
+#ARCH_LIST=(aarch64 ppc64le s390x x86_64)
 URL_BASE="https://tiny.distro.builders/"
 # DIRS
 CONF_DIR="${WORK_DIR}/conf"
@@ -83,6 +84,15 @@ do
         ;;
   esac
 done
+
+#####
+# Repo configs
+#####
+if echo ${REPONAME} | grep -q archful-source ; then
+  REPO_BASE=$(echo ${REPONAME} | cut -d'-' -f1)
+else
+  REPO_BASE=${REPONAME}
+fi
 
 #####
 # Variables

@@ -25,7 +25,7 @@ from pathlib import Path
 parser = argparse.ArgumentParser()
 parser.add_argument('-f', '--file', default='./package-list.txt', help="List of package NVRs")
 parser.add_argument('-r', '--repo', default='eln', help="What repo are we using",
-        choices=["rawhide", "eln", "c9s", "a-neptune", "cs8e", "a-podman", "a-q-podman", "a-servers", "a-combined"])
+        choices=["rawhide", "eln", "c9s", "cs8e", "combined", "minimal", "podman", "qpodman", "servers"])
 parser.add_argument('-w', '--workdir', default=os.getcwd()+"/", help="Where we are doing the work")
 parser.add_argument("-v", "--verbose", help="Enable debug logging", action='store_true')
 args = parser.parse_args()
@@ -54,7 +54,7 @@ elif repoBase == "c9s":
 else:
     kojiStyle = "mbox"
     repoName = "cs8e"
-    archList = ["aarch64", "ppc64le", "x86_64"]
+    archList = ["aarch64", "x86_64"]
     coreAppend = "redhat-release"
     baseURL = "https://koji.mbox.centos.org/pkgs/packages"
     repoList = ["cs8-baseos", "cs8-appstream", "cs8-powertools", "cs8-extras", "cs8-epel", "cs8-epel-next"]
